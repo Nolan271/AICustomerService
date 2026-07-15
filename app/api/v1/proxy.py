@@ -15,11 +15,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from httpx import AsyncClient, Timeout
 
 from app.config import settings
-from app.auth.external_auth import require_token
+# from app.auth.external_auth import require_token  # TODO: 调试完后恢复
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = settings.EXTERNAL_API_BASE_URL
+
+# TODO: 调试用写死 Token，后续改为从请求头获取
+_HARDCODED_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJsb2dpbl91c2VyX2tleSI6IjQ1NWFjZmY3LTdjNTUtNGNkNS1iNDU0LWIyYTZkYWVmNTQzMyJ9.gBWgmRh8YfntS8b45kLmISkDCnPmtILx6YpxRo5IVOvzQT67i3ZwqFls1RKf9EXG_dBJVVCYuHegGk4zJ_mNQg"
 
 router = APIRouter(prefix="/proxy", tags=["数据代理"])
 
@@ -28,7 +31,7 @@ router = APIRouter(prefix="/proxy", tags=["数据代理"])
 async def proxy_request(
     path: str,
     body: dict = None,
-    token: str = Depends(require_token),  # 用户的 token，已验证
+    # token: str = Depends(require_token),  # TODO: 调试完后恢复
 ):
     """代理到外部 API：POST /api/v1/proxy/{path}
 
@@ -37,10 +40,10 @@ async def proxy_request(
     """
     url = f"{BASE_URL}/{path}"
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Authorization": "Bearer " + _HARDCODED_TOKEN,
         "Content-Type": "application/json",
     }
-    logger.info("代理请求: POST %s (用户已认证)", url)
+    logger.info("代理请求: POST %s", url)
     async with AsyncClient(timeout=Timeout(settings.EXTERNAL_API_TIMEOUT)) as client:
         resp = await client.post(url, json=body or {}, headers=headers)
     if resp.status_code != 200:
@@ -52,11 +55,11 @@ async def proxy_request(
 @router.get("/{path:path}")
 async def proxy_get(
     path: str,
-    token: str = Depends(require_token),
+    # token: str = Depends(require_token),  # TODO: 调试完后恢复
 ):
     """代理到外部 API：GET /api/v1/proxy/{path}"""
     url = f"{BASE_URL}/{path}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": "Bearer " + _HARDCODED_TOKEN}
     async with AsyncClient(timeout=Timeout(settings.EXTERNAL_API_TIMEOUT)) as client:
         resp = await client.get(url, headers=headers)
     if resp.status_code != 200:

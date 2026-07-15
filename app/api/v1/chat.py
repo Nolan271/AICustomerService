@@ -10,7 +10,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.core.chat_service import ChatService
 from app.dependencies import get_chat_service
-from app.auth.external_auth import require_token
+# from app.auth.external_auth import require_token  # TODO: 调试完后恢复
 
 router = APIRouter(prefix="/chat", tags=["对话"])
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/chat", tags=["对话"])
 async def chat_completion(
     request: ChatRequest,
     chat_service: ChatService = Depends(get_chat_service),
-    token: str = Depends(require_token),
+    # token: str = Depends(require_token),  # TODO: 调试完后恢复
 ):
     """非流式对话 — 单次问答
 
@@ -31,7 +31,7 @@ async def chat_completion(
         user_input=request.message,
         kb_id=request.kb_id,
         user_id=request.user_id,
-        user_token=token,         # 传给对话服务，data_query 时使用
+        # user_token=token,         # TODO: 调试完后恢复
     )
 
     return ChatResponse(
@@ -50,7 +50,7 @@ async def chat_completion(
 async def chat_completion_stream(
     request: ChatRequest,
     chat_service: ChatService = Depends(get_chat_service),
-    token: str = Depends(require_token),
+    # token: str = Depends(require_token),  # TODO: 调试完后恢复
 ):
     """流式对话 — SSE (Server-Sent Events)
 
