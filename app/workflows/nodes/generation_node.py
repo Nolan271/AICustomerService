@@ -6,6 +6,7 @@
 import logging
 import time
 
+from app.config import settings
 from app.llm.factory import LLMFactory
 from app.rag.prompt_templates import RAG_PROMPT, CHITCHAT_PROMPT
 from app.utils.common import format_chat_history
@@ -55,7 +56,7 @@ async def generation_node(state: ChatState) -> dict:
 
     # 知识问答 / 追问澄清
     import re
-    MEDIA_BASE = "http://localhost:8000/api/v1/media/images"
+    MEDIA_BASE = settings.MEDIA_BASE_URL
 
     context_parts = []
     for text, s in zip(
