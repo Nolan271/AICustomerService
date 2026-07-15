@@ -66,11 +66,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS 中间件 — 生产环境应从 settings 读取
+# CORS 中间件 — 开发环境允许所有来源
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS if hasattr(settings, 'CORS_ORIGINS') and settings.CORS_ORIGINS else ["*"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

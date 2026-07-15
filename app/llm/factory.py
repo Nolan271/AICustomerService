@@ -12,7 +12,31 @@ logger = logging.getLogger(__name__)
 
 
 class LLMFactory:
-    """LLM 实例工厂，支持 openai / ollama / anthropic"""
+    """LLM 实例工厂，支持 openai / ollama / anthropic + 分层模型"""
+
+    @classmethod
+    def get_fast_model(
+        cls,
+        temperature: Optional[float] = None,
+        streaming: Optional[bool] = None,
+    ) -> BaseChatModel:
+        """获取快速模型（qwen-turbo），用于意图识别等简单任务"""
+        provider = settings.LLM_PROVIDER
+        model = settings.FAST_LLM_MODEL
+        temp = temperature if temperature is not None else 0.0
+        stream = streaming if streaming is not None else False
+
+        if provider == "openai":
+            return init_chat_model(
+                model,
+                model_provider="openai",
+                temperature=temp,
+                streaming=stream,
+                api_key=settings.OPENAI_API_KEY,
+                base_url=settings.OPENAI_BASE_URL,
+            )
+        # ollama/anthropic 降级为默认模型
+        return cls.get_chat_model(temperature=temp, streaming=stream)
 
     @classmethod
     def get_chat_model(

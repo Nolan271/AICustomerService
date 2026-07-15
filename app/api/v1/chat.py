@@ -26,12 +26,15 @@ async def chat_completion(
     需要 Authorization: Bearer <外部API的Token>
     Token 同时用于鉴权和数据查询时的外部 API 调用。
     """
+    # TODO: 调试完后从 token 参数获取 user_token
+    _debug_token = "eyJhbGciOiJIUzUxMiJ9.eyJsb2dpbl91c2VyX2tleSI6IjQ1NWFjZmY3LTdjNTUtNGNkNS1iNDU0LWIyYTZkYWVmNTQzMyJ9.gBWgmRh8YfntS8b45kLmISkDCnPmtILx6YpxRo5IVOvzQT67i3ZwqFls1RKf9EXG_dBJVVCYuHegGk4zJ_mNQg"
     result = await chat_service.chat(
         session_id=request.session_id,
         user_input=request.message,
         kb_id=request.kb_id,
         user_id=request.user_id,
-        # user_token=token,         # TODO: 调试完后恢复
+        user_token=_debug_token,    # TODO: 调试完后改为 user_token=token
+        intent_hint=request.intent_hint,
     )
 
     return ChatResponse(

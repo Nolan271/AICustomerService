@@ -28,6 +28,8 @@ class SessionResponse(BaseModel):
 class SessionList(BaseModel):
     items: list[SessionResponse]
     total: int
+    page: int
+    page_size: int
 
 
 class MessageResponse(BaseModel):

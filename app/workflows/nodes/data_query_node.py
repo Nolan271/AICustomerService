@@ -5,6 +5,7 @@
 
 import json
 import logging
+import time
 from typing import Optional
 
 from httpx import AsyncClient, Timeout
@@ -61,6 +62,7 @@ async def data_query_direct(user_input: str, user_token: str | None = None) -> O
 
 async def data_query_node(state: ChatState) -> dict:
     """数据查询节点：意图识别 -> 选 API -> 调用 -> 生成回答"""
+    start = time.time()
     user_input = state["user_input"]
     user_token = state.get("user_token")
 
@@ -71,32 +73,40 @@ async def data_query_node(state: ChatState) -> dict:
         }
 
     # 1. 用 LLM 选择调哪个 API
+    t0 = time.time()
     api_choice = await _select_api(user_input)
+    select_elapsed = round((time.time() - t0) * 1000)
     if not api_choice:
         return {
             "answer": '抱歉，我不太确定您想查询什么数据，请更具体地描述，例如："营收情况"、"订单数量"、"电量统计"、"设备状态"等。',
-            "processing_steps": ["数据查询: 未匹配到合适 API"],
+            "processing_steps": [f"数据查询: 未匹配到合适API({select_elapsed}ms)"],
         }
 
     # 2. 用用户的 token 调用 API
+    t0 = time.time()
     try:
         api_data = await _call_api(api_choice, token=user_token)
     except Exception as e:
         logger.error("API 调用失败（工作流路径）", exc_info=True)
         return {
             "answer": "查询数据时遇到问题，请稍后再试。",
-            "processing_steps": ["数据查询失败: " + str(e)],
+            "processing_steps": [f"数据查询失败({select_elapsed}ms)"],
         }
+    api_elapsed = round((time.time() - t0) * 1000)
 
     # 3. 用 LLM 生成回答 + 图表配置
+    t0 = time.time()
     answer, chart_config = await _generate_answer(user_input, api_choice["path"], api_data)
-    logger.info("数据查询: path=%s, chart=%s, answer_len=%d",
-                api_choice["path"], chart_config is not None, len(answer))
+    gen_elapsed = round((time.time() - t0) * 1000)
+
+    total_elapsed = round((time.time() - start) * 1000)
+    logger.info("数据查询: path=%s, select=%dms, api=%dms, gen=%dms, total=%dms",
+                api_choice["path"], select_elapsed, api_elapsed, gen_elapsed, total_elapsed)
 
     return {
         "answer": answer,
         "chart_config": chart_config,
-        "processing_steps": ["数据查询: " + api_choice["path"]],
+        "processing_steps": [f"数据查询({api_choice['path']}) {total_elapsed}ms"],
         "sources": [{"doc_name": "API: " + api_choice["path"], "text": str(api_data)[:200]}],
     }
 
@@ -116,7 +126,7 @@ async def _select_api(user_input: str) -> Optional[dict]:
 
 用户问题: {user_input}"""
 
-    llm = LLMFactory.get_chat_model(temperature=0.0, streaming=False)
+    llm = LLMFactory.get_fast_model(temperature=0.0, streaming=False)
     result = await llm.ainvoke(prompt)
     chosen_path = result.content.strip()
 
@@ -198,6 +208,6 @@ async def _generate_answer(user_input: str, api_path: str, api_data: dict) -> tu
 
 请用自然、友好的语言回答用户，突出关键数据。如果数据包含金额，带上单位（元）。如果数据包含趋势，简要说明趋势方向。"""
 
-    llm = LLMFactory.get_chat_model(temperature=0.3, streaming=False)
+    llm = LLMFactory.get_fast_model(temperature=0.3, streaming=False)
     result = await llm.ainvoke(prompt)
     return result.content, chart_config

@@ -51,7 +51,7 @@ class MemoryManager:
     async def summarize_short_term(self, session_id: str) -> str:
         """对短期记忆做摘要（压缩上下文）"""
         messages = await self.get_short_term(session_id, limit=20)
-        if len(messages) <= 6:  # 3轮以内不需要摘要
+        if len(messages) <= 20:  # 少于 10 轮对话不做摘要
             return ""
 
         from app.llm.factory import LLMFactory
@@ -61,7 +61,7 @@ class MemoryManager:
             f"{m['role']}: {m['content'][:200]}"
             for m in messages[:-4]  # 最近两轮不压缩
         )
-        llm = LLMFactory.get_chat_model(temperature=0.0, streaming=False)
+        llm = LLMFactory.get_fast_model()  # 用快模型
         result = await llm.ainvoke(
             SUMMARY_PROMPT.format(dialog=dialog)
         )
@@ -222,8 +222,9 @@ class MemoryManager:
 
         # 短期记忆
         context["chat_history"] = await self.get_short_term(session_id)
-        if len(context["chat_history"]) > 6:
-            context["summary"] = await self.summarize_short_term(session_id)
+        # 对话摘要已关闭（单轮对话，无需压缩历史）
+        # if len(context["chat_history"]) > 20:
+        #     context["summary"] = await self.summarize_short_term(session_id)
 
         # 长期记忆
         if user_id:

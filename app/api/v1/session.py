@@ -15,17 +15,42 @@ router = APIRouter(prefix="/sessions", tags=["会话"])
 @router.get("", response_model=SessionList)
 async def list_sessions(
     user_id: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
     db=Depends(get_db),
 ):
-    """获取会话列表"""
-    stmt = select(Conversation).order_by(Conversation.updated_at.desc())
+    """获取会话列表（分页）
+
+    Args:
+        user_id: 按用户筛选
+        page: 页码，从 1 开始
+        page_size: 每页条数，默认 20
+    """
+    # 总条数
+    count_stmt = select(Conversation)
+    if user_id:
+        count_stmt = count_stmt.where(Conversation.user_id == user_id)
+    total_result = await db.execute(count_stmt)
+    total = len(list(total_result.scalars().all()))
+
+    # 分页查询
+    offset = (page - 1) * page_size
+    stmt = (
+        select(Conversation)
+        .order_by(Conversation.updated_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
     if user_id:
         stmt = stmt.where(Conversation.user_id == user_id)
     result = await db.execute(stmt)
     sessions = list(result.scalars().all())
+
     return SessionList(
         items=[SessionResponse.model_validate(s) for s in sessions],
-        total=len(sessions),
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 

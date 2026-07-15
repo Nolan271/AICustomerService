@@ -65,10 +65,44 @@
 
     <!-- 消息列表 -->
     <view class="msg-list" id="msg-list" ref="msgList">
-      <view v-if="messages.length === 0" class="empty-state">
-        <text class="empty-icon">💬</text>
-        <text class="empty-text">您好！我是 AI 客服助手，</text>
-        <text class="empty-text">请告诉我您想了解什么？</text>
+      <!-- 提示词列表（始终显示） -->
+      <view class="prompts-wrap">
+        <view class="prompts-tabs">
+          <text
+            class="prompts-tab"
+            :class="{ 'prompts-tab-active': promptTab === 'all' }"
+            @click="promptTab = 'all'"
+          >全部</text>
+          <text
+            class="prompts-tab"
+            :class="{ 'prompts-tab-active': promptTab === 'revenue' }"
+            @click="promptTab = 'revenue'"
+          >运营收益</text>
+          <text
+            class="prompts-tab"
+            :class="{ 'prompts-tab-active': promptTab === 'orders' }"
+            @click="promptTab = 'orders'"
+          >用户订单</text>
+          <text
+            class="prompts-tab"
+            :class="{ 'prompts-tab-active': promptTab === 'device' }"
+            @click="promptTab = 'device'"
+          >设备相关</text>
+        </view>
+        <text class="prompts-title">💡 试试问这些</text>
+        <view
+          v-for="(item, idx) in currentPrompts"
+          :key="idx"
+          class="prompt-item"
+          @click="sendPrompt(item.text, item.intent)"
+        >
+          <text class="prompt-text">{{ item.text }}</text>
+          <text class="prompt-arrow">➤</text>
+        </view>
+        <view class="prompts-footer">
+          <text class="prompts-page">{{ promptPage }}/{{ totalPromptPages }}</text>
+          <text class="prompts-next" @click="nextPrompts">换一批 →</text>
+        </view>
       </view>
 
       <view
@@ -137,13 +171,13 @@
           @confirm="sendMessage"
           @input="onInput"
         />
-        <button
+        <view
           class="send-btn"
-          :disabled="!inputText.trim() || loading"
+          :class="{ 'send-btn-disabled': !inputText.trim() || loading }"
           @click="sendMessage"
         >
-          <text class="send-icon">➤</text>
-        </button>
+          <text class="send-icon">发送</text>
+        </view>
       </view>
     </view>
   </view>
@@ -175,7 +209,27 @@ export default {
       hasMoreHistory: false,
       showHistory: false,
       sessions: [],
-      groupedSessions: { today: [], yesterday: [], week: [] }
+      groupedSessions: { today: [], yesterday: [], week: [] },
+      promptTab: 'all',
+      promptPage: 1,
+      pendingIntent: null,
+      allPrompts: [
+        { text: '本周收益情况',           cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '本月收益情况',           cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '有哪些增加收益的策略',    cat: 'revenue', intent: 'KB_QA' },
+        { text: '上个月收益对比',         cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '本季度订单趋势',         cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '近7天营收趋势',          cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '昨日电量统计',           cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '我的收益什么时候到账',   cat: 'revenue', intent: 'KB_QA' },
+        { text: '今日订单数量',           cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '渠道钱包如何提现',       cat: 'orders', intent: 'KB_QA' },
+        { text: '为什么打开金额比结算收益少了', cat: 'orders', intent: 'KB_QA' },
+        { text: '如何查看对账单',         cat: 'orders', intent: 'KB_QA' },
+        { text: '站点收益排行榜',         cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '充电桩设备状态',         cat: 'device', intent: 'DATA_QUERY' },
+        { text: '安心充开通收益',         cat: 'device', intent: 'KB_QA' },
+      ]
     }
   },
 
@@ -184,6 +238,19 @@ export default {
     this.checkDevice()
   },
 
+  computed: {
+    filteredPrompts() {
+      if (this.promptTab === 'all') return this.allPrompts
+      return this.allPrompts.filter(p => p.cat === this.promptTab)
+    },
+    currentPrompts() {
+      const start = (this.promptPage - 1) * 5
+      return this.filteredPrompts.slice(start, start + 5)
+    },
+    totalPromptPages() {
+      return Math.ceil(this.filteredPrompts.length / 5)
+    }
+  },
   methods: {
     // ── 初始化 ──
     initSession() {
@@ -215,6 +282,20 @@ export default {
       this.messages = []
       this.inputText = ''
       uni.setStorageSync('ai_last_session', this.sessionId)
+    },
+
+    // ── 提示词 ──
+    sendPrompt(text, intent) {
+      this.inputText = text
+      this.pendingIntent = intent
+      this.sendMessage()
+    },
+    nextPrompts() {
+      if (this.promptPage < this.totalPromptPages) {
+        this.promptPage++
+      } else {
+        this.promptPage = 1
+      }
     },
 
     // ── 历史记录 ──
@@ -341,7 +422,9 @@ export default {
 
       // 调用后端 API
       try {
-        const result = await apiSendMessage(this.sessionId, text)
+        const hint = this.pendingIntent
+        this.pendingIntent = null
+        const result = await apiSendMessage(this.sessionId, text, hint)
 
         const botMsg = {
           id: generateId(),
@@ -524,22 +607,82 @@ export default {
   -webkit-overflow-scrolling: touch;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-top: 200rpx;
-  color: #bbb;
+/* ── 提示词列表 ── */
+.prompts-wrap {
+  padding: 40rpx 28rpx 40rpx;
 }
-.empty-icon {
-  font-size: 80rpx;
+.prompts-tabs {
+  display: flex;
+  gap: 12rpx;
   margin-bottom: 20rpx;
 }
-.empty-text {
+.prompts-tab {
+  font-size: 24rpx;
+  color: #666;
+  padding: 12rpx 24rpx;
+  border-radius: 30rpx;
+  background: #f0f2f5;
+  line-height: 1;
+}
+.prompts-tab-active {
+  background: #0f3460;
+  color: #fff;
+  font-weight: 500;
+}
+.prompts-title {
+  display: block;
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 28rpx;
+  font-weight: 500;
+}
+.prompt-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26rpx 24rpx;
+  margin-bottom: 16rpx;
+  background: #fff;
+  border-radius: 14rpx;
+  border: 2rpx solid #e8e8e8;
+}
+.prompt-item:active {
+  background: #f5f6f8;
+  border-color: #0f3460;
+}
+.prompt-text {
   font-size: 26rpx;
+  color: #333;
+  flex: 1;
+  padding-right: 16rpx;
+  line-height: 1.4;
+}
+.prompt-arrow {
+  font-size: 24rpx;
+  color: #ccc;
+  flex-shrink: 0;
+}
+.prompts-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+  margin-top: 32rpx;
+}
+.prompts-page {
+  font-size: 24rpx;
   color: #bbb;
-  line-height: 1.6;
+}
+.prompts-next {
+  font-size: 26rpx;
+  color: #0f3460;
+  padding: 8rpx 20rpx;
+  border: 2rpx solid #0f3460;
+  border-radius: 30rpx;
+}
+.prompts-next:active {
+  background: #0f3460;
+  color: #fff;
 }
 
 .msg-item {
@@ -748,26 +891,24 @@ export default {
   color: #999;
 }
 .send-btn {
-  width: 72rpx;
   height: 72rpx;
-  border-radius: 50%;
+  min-width: 120rpx;
+  border-radius: 36rpx;
   background: #0f3460;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 0;
+  padding: 0 24rpx;
 }
-.send-btn[disabled] {
+.send-btn-disabled {
   opacity: .35;
 }
 .send-icon {
   color: #fff;
-  font-size: 32rpx;
-}
-button::after {
-  border: none;
+  font-size: 28rpx;
+  font-weight: 500;
 }
 
 /* ── 历史记录面板 ── */

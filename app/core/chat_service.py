@@ -45,6 +45,7 @@ class ChatService:
         kb_id: Optional[str] = None,
         user_id: Optional[str] = None,
         user_token: Optional[str] = None,       # 外部 API token，数据查询时使用
+        intent_hint: Optional[str] = None,       # 前端分类按钮传入的意图提示
     ) -> dict:
         """单次对话（非流式）
 
@@ -52,20 +53,27 @@ class ChatService:
           记忆加载 → LangGraph 工作流 → 持久化 → 长期记忆提取
         """
         start = time.time()
+        timings = {}
 
         # 1. 加载记忆上下文
+        t0 = time.time()
         memory_context = await self.memory.build_context(session_id, user_id)
         history = memory_context["chat_history"]
+        timings["load_memory"] = round((time.time() - t0) * 1000)
+        logger.info("[耗时] 加载记忆: %dms", timings["load_memory"])
 
         # 1b. 快速检测是否为数据查询 — 直通处理（带 token）
+        t0 = time.time()
         from app.workflows.nodes.data_query_node import data_query_direct, _select_api
         api_check = await _select_api(user_input)
-        logger.info("数据查询检测: input=%s, matched=%s", user_input[:30], api_check['path'] if api_check else None)
+        timings["detect_intent"] = round((time.time() - t0) * 1000)
+        logger.info("[耗时] 数据查询检测: %dms, matched=%s",
+                     timings["detect_intent"], api_check['path'] if api_check else None)
         dq_result = await data_query_direct(user_input, user_token) if api_check else None
         if dq_result:
-            elapsed = (time.time() - start) * 1000
-            logger.info("数据查询直通: session=%s, chart=%s, latency=%.0fms",
-                         session_id, dq_result.get("chart_config") is not None, elapsed)
+            elapsed = round((time.time() - start) * 1000)
+            logger.info("[耗时] 数据查询直通: %dms | session=%s, chart=%s",
+                         elapsed, session_id, dq_result.get("chart_config") is not None)
             await self._persist_messages(session_id, user_input, dq_result["answer"], {
                 "intent": "DATA_QUERY", "user_id": user_id,
                 "sources": dq_result.get("sources", []),
@@ -80,6 +88,7 @@ class ChatService:
                 "memory_summary": memory_context.get("summary", ""),
                 "fact_count": len(memory_context.get("long_term_facts", [])),
                 "chart_config": dq_result.get("chart_config"),
+                "timings": timings,
             }
 
         # 2. 构建初始状态
@@ -89,6 +98,7 @@ class ChatService:
             "user_id": user_id or "",
             "user_token": user_token,         # 传给 data_query_node 调外部 API
             "kb_id": kb_id,
+            "intent_hint": intent_hint,         # 传给 router_node 加速分类
             "messages": history,
             "intent": None,
             "retrieved_chunks": None,
@@ -104,7 +114,8 @@ class ChatService:
             "latency_ms": None,
         }
 
-        # 3. 执行 LangGraph 工作流
+        # 3. 执行 LangGraph 工作流（包含 意图识别→检索/数据查询→生成→护栏→记忆）
+        t0 = time.time()
         try:
             final_state = await self.graph.ainvoke(initial_state)
         except Exception as e:
@@ -115,30 +126,43 @@ class ChatService:
                 "error": str(e),
                 "processing_steps": [f"错误: {e}"],
             }
+        timings["workflow"] = round((time.time() - t0) * 1000)
 
-        elapsed = (time.time() - start) * 1000
-        logger.info(
-            "对话完成: session=%s, intent=%s, chart=%s, latency=%.0fms",
-            session_id, final_state.get("intent"),
-            final_state.get("chart_config") is not None,
-            elapsed,
-        )
+        # ← 解析工作流各步骤耗时
+        steps = final_state.get("processing_steps", [])
+        logger.info("[耗时] 工作流总耗时: %dms | 步骤: %s",
+                     timings["workflow"], " → ".join(s for s in steps if s))
 
         # 4. 持久化消息
+        t0 = time.time()
         await self._persist_messages(
             session_id, user_input, final_state.get("answer", ""),
             final_state,
         )
+        timings["persist"] = round((time.time() - t0) * 1000)
 
-        # 5. 提取长期记忆
-        if user_id:
-            try:
-                await self.memory.extract_long_term(
-                    session_id, user_input,
-                    final_state.get("answer", ""), user_id,
-                )
-            except Exception as e:
-                logger.info("长期记忆提取跳过（不影响对话）: %s", e)
+        elapsed = round((time.time() - start) * 1000)
+        logger.info(
+            "[耗时] ====== 总耗时: %dms ====== \n"
+            "  加载记忆: %dms | 检测: %dms | 工作流: %dms | 持久化: %dms\n"
+            "  session=%s | intent=%s",
+            elapsed,
+            timings.get("load_memory", 0),
+            timings.get("detect_intent", 0),
+            timings["workflow"],
+            timings["persist"],
+            session_id, final_state.get("intent"),
+        )
+
+        # 5. 提取长期记忆（暂时注释以提升速度）
+        # if user_id:
+        #     try:
+        #         await self.memory.extract_long_term(
+        #             session_id, user_input,
+        #             final_state.get("answer", ""), user_id,
+        #         )
+        #     except Exception as e:
+        #         logger.info("长期记忆提取跳过（不影响对话）: %s", e)
 
         return {
             "answer": final_state.get("answer", ""),
@@ -175,7 +199,7 @@ class ChatService:
         from app.rag.prompt_templates import INTENT_PROMPT
         import json
 
-        llm = LLMFactory.get_chat_model(temperature=0.0, streaming=False)
+        llm = LLMFactory.get_fast_model(temperature=0.0, streaming=False)
         chain = INTENT_PROMPT | llm
         result = await chain.ainvoke({"input": user_input})
         intent = result.content.strip().upper()
@@ -210,7 +234,7 @@ class ChatService:
 
         # 4. 流式 LLM 生成
         from app.rag.prompt_templates import RAG_PROMPT, CHITCHAT_PROMPT
-        stream_llm = LLMFactory.get_chat_model(streaming=True)
+        stream_llm = LLMFactory.get_fast_model(streaming=True)
 
         if intent == "CHITCHAT":
             prompt = CHITCHAT_PROMPT.format(
@@ -246,14 +270,14 @@ class ChatService:
                  "user_id": user_id, "processing_steps": []}
         await self._persist_messages(session_id, user_input, full_answer, state)
 
-        # 8. 记忆提取
-        if user_id:
-            try:
-                await self.memory.extract_long_term(
-                    session_id, user_input, full_answer, user_id,
-                )
-            except Exception as e:
-                logger.info("长期记忆提取跳过（不影响对话）: %s", e)
+        # 8. 记忆提取（暂时注释以提升速度）
+        # if user_id:
+        #     try:
+        #         await self.memory.extract_long_term(
+        #             session_id, user_input, full_answer, user_id,
+        #         )
+        #     except Exception as e:
+        #         logger.info("长期记忆提取跳过（不影响对话）: %s", e)
 
         yield {"type": "done"}
 

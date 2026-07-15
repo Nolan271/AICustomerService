@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="用户消息", min_length=1, max_length=4000)
     kb_id: Optional[str] = Field(None, description="知识库 ID（可选）")
     user_id: Optional[str] = Field(None, description="用户标识")
+    intent_hint: Optional[str] = Field(None, description="意图提示，前端分类按钮传入：DATA_QUERY | KB_QA")
 
 
 class SourceItem(BaseModel):

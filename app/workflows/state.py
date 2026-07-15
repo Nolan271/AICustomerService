@@ -13,6 +13,7 @@ class ChatState(TypedDict):
     user_id: Optional[str]
     user_token: Optional[str]              # 外部 API 的 Bearer Token
     kb_id: Optional[str]
+    intent_hint: Optional[str]             # 前端分类按钮传入的意图提示
 
     # ── 中间状态 ──
     intent: Optional[str]                         # 路由节点识别出的意图

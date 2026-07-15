@@ -4,6 +4,7 @@
 """
 
 import logging
+import time
 
 from app.llm.factory import LLMFactory
 from app.rag.prompt_templates import RAG_PROMPT, CHITCHAT_PROMPT
@@ -15,8 +16,9 @@ logger = logging.getLogger(__name__)
 
 async def generation_node(state: ChatState) -> dict:
     """生成节点：构造 Prompt → 调用 LLM"""
+    start = time.time()
     intent = state.get("intent", "KB_QA")
-    llm = LLMFactory.get_chat_model(streaming=True)
+    llm = LLMFactory.get_fast_model()
 
     # 闲聊/问候 — 无需知识库上下文
     if intent == "CHITCHAT":
@@ -27,9 +29,10 @@ async def generation_node(state: ChatState) -> dict:
             "messages": [],
             "chat_history": chat_history,
         })
+        elapsed = round((time.time() - start) * 1000)
         return {
             "answer": result.content,
-            "processing_steps": ["闲聊模式"],
+            "processing_steps": [f"闲聊生成 {elapsed}ms"],
         }
 
     # 转人工
@@ -59,7 +62,6 @@ async def generation_node(state: ChatState) -> dict:
         state.get("context_documents", []) or [],
         state.get("sources", []) or [],
     ):
-        # 将 [图片: xxx.jpg] 替换为可查看的图片链接
         text_with_images = re.sub(
             r'\[图片:\s*([^\]]+\.jpg)\]',
             r'[查看图片](' + MEDIA_BASE + r'/\1)',
@@ -68,7 +70,6 @@ async def generation_node(state: ChatState) -> dict:
         context_parts.append(f"📄 [{s.get('doc_name', '未知文档')}] {text_with_images}")
 
     context = "\n\n---\n\n".join(context_parts) or "未找到相关知识。"
-
     chat_history = format_chat_history(state.get("messages", []))
 
     chain = RAG_PROMPT | llm
@@ -79,7 +80,8 @@ async def generation_node(state: ChatState) -> dict:
         "messages": [],
     })
 
+    elapsed = round((time.time() - start) * 1000)
     return {
         "answer": result.content,
-        "processing_steps": ["回答生成完成"],
+        "processing_steps": [f"回答生成 {elapsed}ms"],
     }

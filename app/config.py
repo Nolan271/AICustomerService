@@ -1,6 +1,6 @@
 """应用配置 — 基于 pydantic-settings 的分层配置管理"""
 
-from typing import Optional, List
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,8 +17,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "AiCustomerService"
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
-    CORS_ORIGINS: Optional[List[str]] = None   # 生产环境: ["https://app.com"]
-
     # ---- LLM ----
     LLM_PROVIDER: str = "openai"             # openai | ollama | dashscope
     OPENAI_API_KEY: Optional[str] = None      # 兼容 OpenAI / 阿里云百炼
@@ -26,6 +24,9 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "qwen3.7-plus"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2:7b"
+
+    # ---- 分层模型 ----
+    FAST_LLM_MODEL: str = "qwen-turbo"           # 简单任务用快模型
 
     # ---- Embedding ----
     # provider: openai | dashscope | ollama
