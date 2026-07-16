@@ -213,6 +213,7 @@ export default {
       promptTab: 'all',
       promptPage: 1,
       pendingIntent: null,
+      imgBaseUrl: (import.meta.env.VITE_SERVER_BASE || 'http://3d0e7225.r10.cpolar.top'),
       allPrompts: [
         // ── 运营收益 ──
         { text: '本月营收有多少',          cat: 'revenue', intent: 'DATA_QUERY' },
@@ -513,8 +514,12 @@ export default {
       h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       h = h.replace(/\*(.+?)\*/g, '<em>$1</em>')
 
-      // 图片
-      h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:8rpx;margin:8rpx 0" />')
+      // 图片（相对路径补全为完整 URL，小程序需要）
+      h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+        // 如果 src 以 / 开头，拼接完整后端地址
+        const fullSrc = src.startsWith('/') ? this.imgBaseUrl + src : src
+        return '<img src="' + fullSrc + '" alt="' + alt + '" style="max-width:100%;border-radius:8rpx;margin:8rpx 0" />'
+      })
 
       // 链接
       h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')

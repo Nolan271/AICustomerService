@@ -7,7 +7,7 @@
 // 后端服务地址 — 小程序后台需配此域名到 request 白名单
 // 开发时可以用 http://localhost:8000（需微信开发者工具不校验域名）
 // 生产环境用你实际部署的域名
-const API_BASE = 'http://localhost:8001/api/v1'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://3d0e7225.r10.cpolar.top/api/v1'
 
 function getToken() {
   try {
