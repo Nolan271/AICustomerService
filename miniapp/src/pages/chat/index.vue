@@ -7,8 +7,8 @@
         <text class="nav-hist-btn" @click="toggleHistory">📋</text>
       </view>
       <view class="nav-info">
-        <text class="nav-title">AI 智能客服</text>
         <text class="nav-subtitle">{{ statusText }}</text>
+        <text class="nav-title">AI 运营助手</text>
       </view>
       <view class="nav-right">
         <text class="nav-new-btn" @click="newChat">✚</text>
@@ -89,7 +89,7 @@
             @click="promptTab = 'device'"
           >设备相关</text>
         </view>
-        <text class="prompts-title">💡 试试问这些</text>
+        <text class="prompts-title">💡 我可以帮你阶段使用方面的相关问题</text>
         <view
           v-for="(item, idx) in currentPrompts"
           :key="idx"
@@ -111,9 +111,7 @@
         class="msg-item"
         :class="msg.role === 'user' ? 'msg-user' : 'msg-bot'"
       >
-        <view class="msg-avatar">
-          <text>{{ msg.role === 'user' ? '👤' : '🤖' }}</text>
-        </view>
+
         <view class="msg-content">
           <view class="msg-bubble">
             <rich-text
@@ -141,7 +139,6 @@
 
       <!-- 思考中占位 -->
       <view v-if="loading" class="msg-item msg-bot">
-        <view class="msg-avatar"><text>🤖</text></view>
         <view class="msg-content">
           <view class="msg-bubble thinking-bubble">
             <view class="thinking-dots">
@@ -491,7 +488,8 @@ export default {
     // ── Markdown 转 HTML（供 rich-text 使用） ──
     renderMarkdown(text) {
       if (!text) return ''
-      let h = this._escapeHtml(text)
+      // UniApp rich-text emoji 兼容：将常见 emoji 转为 HTML 实体
+      let h = this._emojiToHtml(this._escapeHtml(text))
 
       // 代码块
       const blocks = []
@@ -544,6 +542,18 @@ export default {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
+    },
+    // UniApp rich-text emoji 兼容：将 emoji 转为 HTML 实体
+    _emojiToHtml(t) {
+      // 常见 emoji 范围：\u{1F300}-\u{1F9FF} 等
+      return t.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, function(m) {
+        var cp = m.codePointAt(0);
+        if (cp > 0xFFFF) {
+          // 高码点 emoji 用 &#xXXXXX; 格式
+          return '&#x' + cp.toString(16).toUpperCase() + ';';
+        }
+        return m;
+      })
     }
   }
 }
@@ -556,7 +566,7 @@ export default {
   height: 100vh;
   overflow: hidden;
   background: #f5f6f8;
-  font-family: -apple-system, 'Helvetica Neue', sans-serif;
+  font-family: -apple-system, 'Helvetica Neue', 'PingFang SC', sans-serif;
 }
 /* 确保子元素不溢出 */
 .chat-page > view {
@@ -567,61 +577,66 @@ export default {
 .nav-bar {
   display: flex;
   align-items: center;
-  padding: 60rpx 0 20rpx;
-  background: #fff;
-  border-bottom: 1rpx solid #e8e8e8;
-  flex-shrink: 0;
-}
-.nav-back {
-  width: 100rpx;
-  height: 60rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 150rpx 0 36rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   flex-shrink: 0;
 }
 .nav-left {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  width: 130rpx;
+  gap: 8rpx;
+  width: 140rpx;
   flex-shrink: 0;
+  padding-left: 20rpx;
 }
 .nav-back-icon {
   font-size: 36rpx;
-  color: #333;
-  padding: 10rpx;
+  color: rgba(255,255,255,.9);
+  padding: 8rpx;
 }
 .nav-hist-btn {
   font-size: 34rpx;
-  padding: 10rpx;
+  padding: 8rpx;
+  color: rgba(255,255,255,.85);
 }
 .nav-info {
   flex: 1;
   text-align: center;
+  position: relative;
+  height: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .nav-title {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #1a1a2e;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 2rpx;
+  line-height: 44rpx;
 }
 .nav-subtitle {
-  font-size: 22rpx;
-  color: #999;
-  margin-top: 4rpx;
+  font-size: 18rpx;
+  color: rgba(255,255,255,.6);
+  position: absolute;
+  top: -32rpx;
+  left: 0;
+  right: 0;
+  text-align: center;
 }
 .nav-right {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  width: 130rpx;
+  width: 140rpx;
   flex-shrink: 0;
+  padding-right: 20rpx;
 }
 .nav-new-btn {
-  font-size: 40rpx;
+  font-size: 38rpx;
   font-weight: 300;
-  color: #666;
-  padding: 10rpx 16rpx;
+  color: rgba(255,255,255,.9);
+  padding: 8rpx 16rpx;
 }
 
 /* ── 消息列表 ── */
@@ -643,7 +658,7 @@ export default {
   margin-bottom: 20rpx;
 }
 .prompts-tab {
-  font-size: 24rpx;
+  font-size: 30rpx;
   color: #666;
   padding: 12rpx 24rpx;
   border-radius: 30rpx;
@@ -651,9 +666,10 @@ export default {
   line-height: 1;
 }
 .prompts-tab-active {
-  background: #0f3460;
+  background: linear-gradient(135deg, #667eea, #764ba2);
   color: #fff;
   font-weight: 500;
+  box-shadow: 0 4rpx 12rpx rgba(102,126,234,.3);
 }
 .prompts-title {
   display: block;
@@ -673,8 +689,8 @@ export default {
   border: 2rpx solid #e8e8e8;
 }
 .prompt-item:active {
-  background: #f5f6f8;
-  border-color: #0f3460;
+  background: #f8f9ff;
+  transform: scale(.98);
 }
 .prompt-text {
   font-size: 26rpx;
@@ -736,12 +752,7 @@ export default {
   font-size: 28rpx;
   flex-shrink: 0;
 }
-.msg-user .msg-avatar {
-  background: #e94560;
-}
-.msg-bot .msg-avatar {
-  background: #0f3460;
-}
+
 
 .msg-content {
   max-width: 75%;
@@ -755,15 +766,16 @@ export default {
   word-break: break-word;
 }
 .msg-user .msg-bubble {
-  background: #e94560;
+  background: linear-gradient(135deg, #667eea, #764ba2);
   color: #fff;
-  border-bottom-right-radius: 6rpx;
+  border-bottom-right-radius: 4rpx;
+  box-shadow: 0 4rpx 12rpx rgba(102,126,234,.25);
 }
 .msg-bot .msg-bubble {
   background: #fff;
   color: #333;
-  border-bottom-left-radius: 6rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0,0,0,.06);
+  border-bottom-left-radius: 4rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,.05);
 }
 .msg-bot .rich-text {
   font-size: 28rpx;
@@ -866,10 +878,10 @@ export default {
   gap: 6rpx;
 }
 .dot {
-  width: 16rpx;
-  height: 16rpx;
+  width: 14rpx;
+  height: 14rpx;
   border-radius: 50%;
-  background: #bbb;
+  background: linear-gradient(135deg, #667eea, #764ba2);
   animation: dotPulse 1.4s infinite;
 }
 .dot:nth-child(2) { animation-delay: .2s; }
@@ -880,7 +892,7 @@ export default {
 }
 .thinking-text {
   font-size: 24rpx;
-  color: #999;
+  color: #667eea;
 }
 
 /* ── 输入区 ── */
@@ -900,7 +912,7 @@ export default {
 }
 .input-box {
   flex: 1;
-  height: 72rpx;
+  height: 92rpx;
   border: 2rpx solid #d9d9d9;
   border-radius: 36rpx;
   padding: 0 28rpx;
@@ -909,24 +921,26 @@ export default {
   outline: none;
 }
 .input-box:focus {
-  border-color: #0f3460;
+  border-color: #667eea;
   background: #fff;
+  box-shadow: 0 0 0 4rpx rgba(102,126,234,.1);
 }
 .input-box[disabled] {
   background: #eee;
   color: #999;
 }
 .send-btn {
-  height: 72rpx;
+  height: 92rpx;
   min-width: 120rpx;
   border-radius: 36rpx;
-  background: #0f3460;
+  background: linear-gradient(135deg, #667eea, #764ba2);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   padding: 0 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(102,126,234,.3);
 }
 .send-btn-disabled {
   opacity: .35;
