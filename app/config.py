@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     MEDIA_DIR: str = "./data/media/images"       # 图片存储目录（Nginx 直接 serve）
     MEDIA_BASE_URL: str = "/media/images"           # 图片 URL 前缀（Nginx 代理路径）
 
+    # ---- 微信 ----
+    WECHAT_TOKEN: str = "mycustomtoken123"       # 微信公众号/测试号配置 Token
+
     # ---- 外部充电桩 API（小程序对接的平台） ----
     EXTERNAL_API_BASE_URL: str = "https://evapp.xingkeele.com/prod-api"
     EXTERNAL_API_TIMEOUT: int = 30

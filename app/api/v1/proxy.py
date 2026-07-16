@@ -10,6 +10,7 @@
     Content-Type: application/json
 """
 
+
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from httpx import AsyncClient, Timeout
