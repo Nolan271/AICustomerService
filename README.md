@@ -55,18 +55,33 @@ uv run python scripts/init_qdrant.py
 
 ### 5. 启动服务
 
+#### 后端
+
 ```bash
-# 开发模式
+# 开发模式（默认 8000 端口）
 uv run uvicorn app.main:app --reload --port 8000
+
+# 或指定端口
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 # 或使用 Docker Compose 全部启动
 docker compose -f docker/docker-compose.yml up -d
+```
+
+#### 前端（UniApp 小程序 H5 预览）
+
+```bash
+cd miniapp
+npm install          # 首次需要安装依赖
+npm run dev:h5       # H5 模式，浏览器打开 http://localhost:8080
+# npm run dev        # 编译到微信小程序，用开发者工具打开 dist/dev/mp-weixin/
 ```
 
 ### 6. 访问
 
 - API 文档: http://localhost:8000/docs
 - 健康检查: http://localhost:8000/api/v1/admin/health
+- H5 前端: http://localhost:8080（miniapp 预览）
 
 ## 项目结构
 

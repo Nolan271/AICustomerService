@@ -5,6 +5,12 @@ export default defineConfig({
   plugins: [uni()],
   server: {
     port: 8080,
-    host: '0.0.0.0'
+    host: '0.0.0.0',
+    proxy: {
+      '/media/images': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      }
+    }
   }
 })

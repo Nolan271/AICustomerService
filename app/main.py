@@ -97,8 +97,14 @@ app.include_router(ws_router, prefix="/api/v1")
 app.include_router(media_router, prefix="/api/v1")
 app.include_router(proxy_router, prefix="/api/v1")
 
-# ── 挂载前端 ─────────────────────────────────────────────────────
+# ── 挂载静态文件 ─────────────────────────────────────────────────
 frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
 if frontend_dir.exists():
     app.mount("/chat", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
     app.mount("/ai-widget", StaticFiles(directory=str(frontend_dir)), name="ai-widget")
+
+# ── 挂载图片目录（开发模式用，生产环境由 Nginx 代理） ──────────
+from app.config import settings
+media_dir = Path(__file__).resolve().parent.parent / "./data/media/images"
+if media_dir.exists():
+    app.mount("/media/images", StaticFiles(directory=str(media_dir)), name="media")

@@ -214,21 +214,42 @@ export default {
       promptPage: 1,
       pendingIntent: null,
       allPrompts: [
-        { text: '本周收益情况',           cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '本月收益情况',           cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '有哪些增加收益的策略',    cat: 'revenue', intent: 'KB_QA' },
-        { text: '上个月收益对比',         cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '本季度订单趋势',         cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '近7天营收趋势',          cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '昨日电量统计',           cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '我的收益什么时候到账',   cat: 'revenue', intent: 'KB_QA' },
-        { text: '今日订单数量',           cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '渠道钱包如何提现',       cat: 'orders', intent: 'KB_QA' },
-        { text: '为什么打开金额比结算收益少了', cat: 'orders', intent: 'KB_QA' },
-        { text: '如何查看对账单',         cat: 'orders', intent: 'KB_QA' },
-        { text: '站点收益排行榜',         cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '充电桩设备状态',         cat: 'device', intent: 'DATA_QUERY' },
-        { text: '安心充开通收益',         cat: 'device', intent: 'KB_QA' },
+        // ── 运营收益 ──
+        { text: '本月营收有多少',          cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '今年累计营收是多少',      cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '上周营收对比',            cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '近14天营收趋势',          cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '月收入统计总数',          cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '日收入明细',              cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '月收入明细列表',          cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '安心充总收益和成本',      cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '未开通安心充预计收益',    cat: 'revenue', intent: 'DATA_QUERY' },
+        { text: '安心充每日收益查询',      cat: 'revenue', intent: 'DATA_QUERY' },
+        // ── 用户订单 ──
+        { text: '今日订单数量',            cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '本月订单有多少',          cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '近14天订单趋势',          cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '今日新增用户',            cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '本月用户增长',            cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '近14天用户增长趋势',      cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '营收排名第几名',          cat: 'orders', intent: 'DATA_QUERY' },
+        { text: '总交易金额是多少',        cat: 'orders', intent: 'DATA_QUERY' },
+        // ── 设备相关 ──
+        { text: '充电桩设备状态',          cat: 'device', intent: 'DATA_QUERY' },
+        { text: '充电枪使用状态',          cat: 'device', intent: 'DATA_QUERY' },
+        { text: '充电桩在线率',            cat: 'device', intent: 'DATA_QUERY' },
+        { text: '近14天充电量趋势',        cat: 'device', intent: 'DATA_QUERY' },
+        { text: '今日充电量统计',          cat: 'device', intent: 'DATA_QUERY' },
+        { text: '本月充电量统计',          cat: 'device', intent: 'DATA_QUERY' },
+        // ── 知识库文档 ──
+        { text: 'XK-630充电主机功能介绍',  cat: 'device', intent: 'KB_QA' },
+        { text: 'XK-63x充电终端说明书',    cat: 'device', intent: 'KB_QA' },
+        { text: 'Z2直流桩用户手册内容',    cat: 'device', intent: 'KB_QA' },
+        { text: 'Z3直流桩使用说明',        cat: 'device', intent: 'KB_QA' },
+        { text: '智能车位锁怎么使用',      cat: 'device', intent: 'KB_QA' },
+        { text: '交流控制器安装说明',      cat: 'device', intent: 'KB_QA' },
+        { text: '景观式取电立柱规格',      cat: 'device', intent: 'KB_QA' },
+        { text: '充电桩的保修政策是什么',  cat: 'device', intent: 'KB_QA' },
       ]
     }
   },
@@ -493,7 +514,7 @@ export default {
       h = h.replace(/\*(.+?)\*/g, '<em>$1</em>')
 
       // 图片
-      h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<image src="$2" alt="$1" style="max-width:100%" mode="widthFix"></image>')
+      h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:8rpx;margin:8rpx 0" />')
 
       // 链接
       h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
@@ -782,7 +803,7 @@ export default {
   color: inherit;
   font-size: 24rpx;
 }
-.rich-text >>> image {
+.rich-text >>> img {
   max-width: 100%;
   border-radius: 8rpx;
   margin: 8rpx 0;

@@ -27,7 +27,6 @@ async def generation_node(state: ChatState) -> dict:
         chain = CHITCHAT_PROMPT | llm
         result = await chain.ainvoke({
             "input": state["user_input"],
-            "messages": [],
             "chat_history": chat_history,
         })
         elapsed = round((time.time() - start) * 1000)
@@ -78,7 +77,6 @@ async def generation_node(state: ChatState) -> dict:
         "context": context,
         "chat_history": chat_history,
         "input": state["user_input"],
-        "messages": [],
     })
 
     elapsed = round((time.time() - start) * 1000)

@@ -62,7 +62,8 @@ class ChatService:
         timings["load_memory"] = round((time.time() - t0) * 1000)
         logger.info("[耗时] 加载记忆: %dms", timings["load_memory"])
 
-        # 1b. 快速检测是否为数据查询 — 直通处理（带 token）
+        # 1b. 快速检测是否为数据查询 — 由 LangGraph 的 router_node 统一处理
+        # 不再在这里做暴力拦截，所有意图都交给工作流
         t0 = time.time()
         from app.workflows.nodes.data_query_node import data_query_direct, _select_api
         api_check = await _select_api(user_input)
@@ -183,101 +184,74 @@ class ChatService:
         kb_id: Optional[str] = None,
         user_id: Optional[str] = None,
     ):
-        """流式对话 — 异步生成器，逐 token 产出
-
-        流程:
-          记忆加载 → 意图识别 → 检索 → 流式 LLM 生成 → 持久化 → 记忆提取
-        """
+        """流式对话 — 基于 LangGraph 工作流（与 chat() 共用同一套逻辑）"""
         start = time.time()
+        timings = {}
 
-        # 1. 记忆加载
+        # 1. 加载记忆上下文（与 chat() 共用）
+        t0 = time.time()
         memory_context = await self.memory.build_context(session_id, user_id)
         history = memory_context["chat_history"]
+        timings["load_memory"] = round((time.time() - t0) * 1000)
 
-        # 2. 意图识别
-        from app.llm.factory import LLMFactory
-        from app.rag.prompt_templates import INTENT_PROMPT
-        import json
+        # 2. 构建初始状态（与 chat() 共用）
+        initial_state = {
+            "session_id": session_id,
+            "user_input": user_input,
+            "user_id": user_id or "",
+            "user_token": None,
+            "kb_id": kb_id,
+            "messages": history,
+            "intent": None,
+            "retrieved_chunks": None,
+            "context_documents": None,
+            "answer": None,
+            "chart_config": None,
+            "sources": None,
+            "follow_up_questions": None,
+            "need_human_handoff": False,
+            "handoff_reason": None,
+            "error": None,
+            "processing_steps": [],
+            "latency_ms": None,
+        }
 
-        llm = LLMFactory.get_fast_model(temperature=0.0, streaming=False)
-        chain = INTENT_PROMPT | llm
-        result = await chain.ainvoke({"input": user_input})
-        intent = result.content.strip().upper()
-        valid_intents = {"KB_QA", "CHITCHAT", "HANDOFF", "CLARIFY"}
-        if intent not in valid_intents:
-            intent = "KB_QA"
+        yield {"type": "start", "intent": ""}
 
-        sources = []
-        context_text = ""
+        # 3. 执行 LangGraph 工作流（与 chat() 共用）
+        t0 = time.time()
+        try:
+            final_state = await self.graph.ainvoke(initial_state)
+        except Exception as e:
+            logger.exception("流式工作流执行失败")
+            yield {"type": "token", "data": "抱歉，我遇到了技术问题，请稍后再试。"}
+            yield {"type": "done"}
+            return
+        timings["workflow"] = round((time.time() - t0) * 1000)
 
-        # 3. KB_QA 或 CLARIFY → 检索
-        if intent in ("KB_QA", "CLARIFY"):
-            from app.rag.retriever import RAGRetriever
-            search_results = await self.retriever.retrieve(
-                query=user_input, kb_id=kb_id,
-            )
-            for r in search_results:
-                sources.append({
-                    "doc_id": r.get("doc_id"),
-                    "doc_name": r.get("doc_name", ""),
-                    "text": r["text"][:200],
-                    "score": round(r.get("score", 0), 4),
-                })
-            context_parts = [
-                f"[{s.get('doc_name', '知识库')}] {r['text']}"
-                for r, s in zip(search_results, sources)
-            ]
-            context_text = "\n\n---\n\n".join(context_parts) if context_parts else ""
+        intent = final_state.get("intent", "")
+        answer = final_state.get("answer", "")
+        sources = final_state.get("sources", [])
 
-        from app.utils.common import format_chat_history
-        chat_history = format_chat_history(history)
-
-        # 4. 流式 LLM 生成
-        from app.rag.prompt_templates import RAG_PROMPT, CHITCHAT_PROMPT
-        stream_llm = LLMFactory.get_fast_model(streaming=True)
-
-        if intent == "CHITCHAT":
-            prompt = CHITCHAT_PROMPT.format(
-                input=user_input, messages=[], chat_history=chat_history,
-            )
-        else:
-            ctx = context_text or "未找到相关知识。"
-            prompt = RAG_PROMPT.format(
-                context=ctx, chat_history=chat_history,
-                input=user_input, messages=[],
-            )
-
-        # 5. 流式输出 token 给前端
-        full_answer = ""
+        # 4. 输出意图
         yield {"type": "start", "intent": intent}
-        async for chunk in stream_llm.astream(prompt):
-            if hasattr(chunk, 'content') and chunk.content:
-                token = chunk.content
-                full_answer += token
-                yield {"type": "token", "data": token}
+
+        # 5. 逐 token 输出回答（从工作流结果中取出，模拟流式）
+        for token in answer:
+            yield {"type": "token", "data": token}
 
         # 6. 元数据
         yield {"type": "sources", "data": sources}
-        if memory_context.get("long_term_facts"):
-            yield {"type": "meta", "fact_count": len(memory_context["long_term_facts"])}
 
-        elapsed = (time.time() - start) * 1000
-        logger.info("流式对话完成: session=%s, intent=%s, len=%d, latency=%.0fms",
-                     session_id, intent, len(full_answer), elapsed)
+        elapsed = round((time.time() - start) * 1000)
+        steps = final_state.get("processing_steps", [])
+        logger.info("[耗时] 流式对话: %dms | %s → %s",
+                     elapsed, " → ".join(s for s in steps if s), f"回答{len(answer)}字")
 
-        # 7. 持久化
+        # 7. 持久化（与 chat() 共用）
         state = {"intent": intent, "sources": sources,
-                 "user_id": user_id, "processing_steps": []}
-        await self._persist_messages(session_id, user_input, full_answer, state)
-
-        # 8. 记忆提取（暂时注释以提升速度）
-        # if user_id:
-        #     try:
-        #         await self.memory.extract_long_term(
-        #             session_id, user_input, full_answer, user_id,
-        #         )
-        #     except Exception as e:
-        #         logger.info("长期记忆提取跳过（不影响对话）: %s", e)
+                 "user_id": user_id, "processing_steps": steps}
+        await self._persist_messages(session_id, user_input, answer, state)
 
         yield {"type": "done"}
 
