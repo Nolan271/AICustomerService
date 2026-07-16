@@ -1,10 +1,12 @@
-# AiCustomerService — Docker Compose 编排
-# 启动全部服务: docker compose -f docker/docker-compose.yml up -d
-# 仅启动 Qdrant:  docker compose -f docker/docker-compose.yml up qdrant -d
+# AiCustomerService — Docker Compose 开发环境
+# 使用方式:
+#   启动全部:    docker compose -f docker/docker-compose.yml up -d
+#   仅 Qdrant:   docker compose -f docker/docker-compose.yml up qdrant -d
+#   停止:        docker compose -f docker/docker-compose.yml down
 
 services:
 
-  # ── API 服务 ──
+  # ── API 服务（开发环境） ──
   api:
     build:
       context: ..
@@ -12,19 +14,19 @@ services:
     container_name: aics-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8001:8000"
     env_file:
       - ../.env
     environment:
-      - QDRANT_HOST=qdrant
+      - QDRANT_HOST=qdrant            # Docker 内用 service 名
       - DATABASE_URL=sqlite+aiosqlite:///data/sqlite/app.db
     volumes:
       - sqlite_data:/app/data/sqlite
       - upload_data:/app/data/uploads
-      - /c/Users/muzhi/MinerU:/app/mineru_input:ro    # MinerU 解析结果
+      - media_data:/app/data/media/images
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/admin/health"]
       interval: 30s
@@ -45,24 +47,10 @@ services:
       - qdrant_data:/qdrant/storage
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    networks:
-      - aics-net
-
-  # ── (可选) Ollama 本地 LLM ──
-  ollama:
-    image: ollama/ollama:latest
-    container_name: aics-ollama
-    restart: unless-stopped
-    profiles:
-      - local-llm
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_models:/root/.ollama
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     networks:
       - aics-net
 
@@ -70,7 +58,7 @@ volumes:
   qdrant_data:
   sqlite_data:
   upload_data:
-  ollama_models:
+  media_data:
 
 networks:
   aics-net:

@@ -31,7 +31,14 @@ uv sync
 ### 2. 配置
 
 ```bash
-cp .env.example .env
+# 后端环境配置
+cp .env.example .env          # 开发环境
+# cp .env.example .env.production  # 生产环境
+
+# 小程序环境配置
+cp miniapp/.env.example miniapp/.env                    # 开发环境
+# cp miniapp/.env.example miniapp/.env.production        # 生产环境
+
 # 编辑 .env 文件，填入必要配置
 # 至少需要配置 OPENAI_API_KEY
 ```
