@@ -23,7 +23,7 @@ services:
     volumes:
       - sqlite_data:/app/data/sqlite
       - upload_data:/app/data/uploads
-      - media_data:/app/data/media/images
+      - ../data/media/images:/app/data/media/images
     depends_on:
       qdrant:
         condition: service_started
@@ -58,7 +58,6 @@ volumes:
   qdrant_data:
   sqlite_data:
   upload_data:
-  media_data:
 
 networks:
   aics-net:
