@@ -69,32 +69,18 @@
       <view class="prompts-wrap">
         <view class="prompts-tabs">
           <text
+            v-for="tab in promptTabs" :key="tab.key"
             class="prompts-tab"
-            :class="{ 'prompts-tab-active': promptTab === 'all' }"
-            @click="promptTab = 'all'"
-          >全部</text>
-          <text
-            class="prompts-tab"
-            :class="{ 'prompts-tab-active': promptTab === 'revenue' }"
-            @click="promptTab = 'revenue'"
-          >运营收益</text>
-          <text
-            class="prompts-tab"
-            :class="{ 'prompts-tab-active': promptTab === 'orders' }"
-            @click="promptTab = 'orders'"
-          >用户订单</text>
-          <text
-            class="prompts-tab"
-            :class="{ 'prompts-tab-active': promptTab === 'device' }"
-            @click="promptTab = 'device'"
-          >设备相关</text>
+            :class="{ 'prompts-tab-active': promptTab === tab.key }"
+            @click="promptTab = tab.key"
+          >{{ tab.label }}</text>
         </view>
         <text class="prompts-title">💡 我可以帮你阶段使用方面的相关问题</text>
         <view
           v-for="(item, idx) in currentPrompts"
           :key="idx"
           class="prompt-item"
-          @click="sendPrompt(item.text, item.intent)"
+          @click="sendPrompt(item.text, item.intent || 'KB_QA')"
         >
           <text class="prompt-text">{{ item.text }}</text>
           <text class="prompt-arrow">➤</text>
@@ -181,7 +167,7 @@
 </template>
 
 <script>
-import { sendMessage as apiSendMessage, createSession, getSessionMessages, getSessions } from '@/utils/ai-api.js'
+import { sendMessage as apiSendMessage, createSession, getSessionMessages, getSessions, getPrompts } from '@/utils/ai-api.js'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -211,56 +197,22 @@ export default {
       promptPage: 1,
       pendingIntent: null,
       imgBaseUrl: (import.meta.env.VITE_SERVER_BASE || 'http://3d0e7225.r10.cpolar.top'),
-      allPrompts: [
-        // ── 运营收益 ──
-        { text: '本月营收有多少',          cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '今年累计营收是多少',      cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '上周营收对比',            cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '近14天营收趋势',          cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '月收入统计总数',          cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '日收入明细',              cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '月收入明细列表',          cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '安心充总收益和成本',      cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '未开通安心充预计收益',    cat: 'revenue', intent: 'DATA_QUERY' },
-        { text: '安心充每日收益查询',      cat: 'revenue', intent: 'DATA_QUERY' },
-        // ── 用户订单 ──
-        { text: '今日订单数量',            cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '本月订单有多少',          cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '近14天订单趋势',          cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '今日新增用户',            cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '本月用户增长',            cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '近14天用户增长趋势',      cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '营收排名第几名',          cat: 'orders', intent: 'DATA_QUERY' },
-        { text: '总交易金额是多少',        cat: 'orders', intent: 'DATA_QUERY' },
-        // ── 设备相关 ──
-        { text: '充电桩设备状态',          cat: 'device', intent: 'DATA_QUERY' },
-        { text: '充电枪使用状态',          cat: 'device', intent: 'DATA_QUERY' },
-        { text: '充电桩在线率',            cat: 'device', intent: 'DATA_QUERY' },
-        { text: '近14天充电量趋势',        cat: 'device', intent: 'DATA_QUERY' },
-        { text: '今日充电量统计',          cat: 'device', intent: 'DATA_QUERY' },
-        { text: '本月充电量统计',          cat: 'device', intent: 'DATA_QUERY' },
-        // ── 知识库文档 ──
-        { text: 'XK-630充电主机功能介绍',  cat: 'device', intent: 'KB_QA' },
-        { text: 'XK-63x充电终端说明书',    cat: 'device', intent: 'KB_QA' },
-        { text: 'Z2直流桩用户手册内容',    cat: 'device', intent: 'KB_QA' },
-        { text: 'Z3直流桩使用说明',        cat: 'device', intent: 'KB_QA' },
-        { text: '智能车位锁怎么使用',      cat: 'device', intent: 'KB_QA' },
-        { text: '交流控制器安装说明',      cat: 'device', intent: 'KB_QA' },
-        { text: '景观式取电立柱规格',      cat: 'device', intent: 'KB_QA' },
-        { text: '充电桩的保修政策是什么',  cat: 'device', intent: 'KB_QA' },
-      ]
+      promptTabs: [{ key: 'all', label: '全部' }],
+      promptMap: {},
+      allPrompts: []
     }
   },
 
   onLoad() {
     this.initSession()
     this.checkDevice()
+    this.loadPrompts()
   },
 
   computed: {
     filteredPrompts() {
       if (this.promptTab === 'all') return this.allPrompts
-      return this.allPrompts.filter(p => p.cat === this.promptTab)
+      return (this.promptMap[this.promptTab] || [])
     },
     currentPrompts() {
       const start = (this.promptPage - 1) * 5
@@ -301,6 +253,27 @@ export default {
       this.messages = []
       this.inputText = ''
       uni.setStorageSync('ai_last_session', this.sessionId)
+    },
+
+    // ── 加载提示词 ──
+    async loadPrompts() {
+      try {
+        const data = await getPrompts()
+        if (data && data.tabs) this.promptTabs = data.tabs
+        if (data && data.prompts) {
+          this.promptMap = data.prompts
+          // 全部提示词平铺
+          const flat = []
+          for (const cat of Object.keys(data.prompts)) {
+            for (const item of data.prompts[cat]) {
+              flat.push({ ...item, cat })
+            }
+          }
+          this.allPrompts = flat
+        }
+      } catch(e) {
+        console.log('加载提示词失败:', e.message)
+      }
     },
 
     // ── 提示词 ──

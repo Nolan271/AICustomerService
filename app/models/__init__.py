@@ -10,3 +10,4 @@ from app.models.message import Message, MessageRole
 from app.models.feedback import Feedback
 from app.models.mineru_asset import DocumentImage, DocumentTable
 from app.models.memory import MemoryFact, UserPreference
+from app.models.prompt import PromptItem

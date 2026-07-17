@@ -22,9 +22,8 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = settings.EXTERNAL_API_BASE_URL
 
-# TODO: 调试用写死 Token，后续改为从请求头获取
-_HARDCODED_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJsb2dpbl91c2VyX2tleSI6IjQ1NWFjZmY3LTdjNTUtNGNkNS1iNDU0LWIyYTZkYWVmNTQzMyJ9.gBWgmRh8YfntS8b45kLmISkDCnPmtILx6YpxRo5IVOvzQT67i3ZwqFls1RKf9EXG_dBJVVCYuHegGk4zJ_mNQg"
-
+# 调试用 Token — 替换为当前要测试的账户
+_HARDCODED_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJsb2dpbl91c2VyX2tleSI6IjQxZWFlYzEwLTkyYmMtNDBiNi04OTFkLTNlZGEzNTU0YjVlYiJ9.KKsAAzs3ap_PGR5HANlgu8tysCo5FtxZsNw2Kthq94HIVqbSiE78ATFntWneyUjaOmc-YBI4Y_i_ZSysWTUs3Q"
 router = APIRouter(prefix="/proxy", tags=["数据代理"])
 
 
@@ -35,9 +34,6 @@ async def proxy_request(
     # token: str = Depends(require_token),  # TODO: 调试完后恢复
 ):
     """代理到外部 API：POST /api/v1/proxy/{path}
-
-    Token 直接从请求头的 Authorization 获取并转发。
-    外部 API 返回什么就返回什么。
     """
     url = f"{BASE_URL}/{path}"
     headers = {

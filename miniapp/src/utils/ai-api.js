@@ -111,6 +111,11 @@ export function submitFeedback(messageId, rating, comment) {
   return request('POST', '/feedback', { message_id: messageId, rating, comment })
 }
 
+/** 获取提示词列表 */
+export function getPrompts() {
+  return request('GET', '/prompts')
+}
+
 /** 获取用户信息（通过外部 API） */
 export function getUserInfo() {
   return request('GET', '/proxy/home/statUsers', { pageNum: 1, pageSize: 1 })

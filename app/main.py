@@ -86,6 +86,7 @@ from app.api.v1.admin import router as admin_router
 from app.api.websocket.chat import router as ws_router
 from app.api.v1.media import router as media_router
 from app.api.v1.proxy import router as proxy_router
+from app.api.v1.prompts import router as prompts_router
 from app.api.v1.wechat import router as wechat_router
 
 app.include_router(chat_router, prefix="/api/v1")
@@ -96,6 +97,7 @@ app.include_router(feedback_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/api/v1")
 app.include_router(media_router, prefix="/api/v1")
+app.include_router(prompts_router, prefix="/api/v1")
 app.include_router(wechat_router)  # 微信验证不需要 /api/v1 前缀
 app.include_router(proxy_router, prefix="/api/v1")
 
