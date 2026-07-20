@@ -1,1013 +1,189 @@
 <template>
   <view class="chat-page">
-    <!-- 导航栏 -->
-    <view class="nav-bar">
-      <view class="nav-left">
-        <text class="nav-back-icon" @click="goBack">←</text>
-        <text class="nav-hist-btn" @click="toggleHistory">📋</text>
-      </view>
-      <view class="nav-info">
-        <text class="nav-subtitle">{{ statusText }}</text>
-        <text class="nav-title">AI 运营助手</text>
-      </view>
-      <view class="nav-right">
-        <text class="nav-new-btn" @click="newChat">✚</text>
-      </view>
-    </view>
+    <chat-header :statusText="statusText" @back="goBack" @toggleHistory="toggleHistory" @newChat="newChat" />
+    <chat-history :visible="showHistory" :sessions="groupedSessions" @close="closeHistory" @loadSession="loadSession" />
 
-    <!-- 历史记录面板 -->
-    <view class="hist-overlay" v-if="showHistory" @click="closeHistory"></view>
-    <view class="hist-panel" :class="{ 'hist-open': showHistory }">
-      <view class="hist-header">
-        <text class="hist-title">历史对话</text>
-        <text class="hist-close" @click="closeHistory">✕</text>
-      </view>
-      <scroll-view class="hist-list" scroll-y>
-        <!-- 今日 -->
-        <view v-if="groupedSessions.today.length" class="hist-group">
-          <text class="hist-group-label">今天</text>
-          <view
-            v-for="s in groupedSessions.today" :key="s.id"
-            class="hist-item" @click="loadSession(s)"
-          >
-            <text class="hist-item-title">{{ s.title || '新对话' }}</text>
-            <text class="hist-item-time">{{ formatSessionTime(s.updated_at || s.created_at) }}</text>
-          </view>
-        </view>
-        <!-- 昨天 -->
-        <view v-if="groupedSessions.yesterday.length" class="hist-group">
-          <text class="hist-group-label">昨天</text>
-          <view
-            v-for="s in groupedSessions.yesterday" :key="s.id"
-            class="hist-item" @click="loadSession(s)"
-          >
-            <text class="hist-item-title">{{ s.title || '新对话' }}</text>
-            <text class="hist-item-time">{{ formatSessionTime(s.updated_at || s.created_at) }}</text>
-          </view>
-        </view>
-        <!-- 近7天 -->
-        <view v-if="groupedSessions.week.length" class="hist-group">
-          <text class="hist-group-label">近7天</text>
-          <view
-            v-for="s in groupedSessions.week" :key="s.id"
-            class="hist-item" @click="loadSession(s)"
-          >
-            <text class="hist-item-title">{{ s.title || '新对话' }}</text>
-            <text class="hist-item-time">{{ formatSessionTime(s.updated_at || s.created_at) }}</text>
-          </view>
-        </view>
-        <!-- 空状态 -->
-        <view v-if="!groupedSessions.today.length && !groupedSessions.yesterday.length && !groupedSessions.week.length" class="hist-empty">
-          <text>暂无历史记录</text>
-        </view>
-      </scroll-view>
-    </view>
-
-    <!-- 消息列表 -->
     <view class="msg-list" id="msg-list" ref="msgList">
-      <!-- 提示词列表（始终显示） -->
-      <view class="prompts-wrap">
-        <view class="prompts-tabs">
-          <text
-            v-for="tab in promptTabs" :key="tab.key"
-            class="prompts-tab"
-            :class="{ 'prompts-tab-active': promptTab === tab.key }"
-            @click="promptTab = tab.key"
-          >{{ tab.label }}</text>
-        </view>
-        <text class="prompts-title">💡 我可以帮你阶段使用方面的相关问题</text>
-        <view
-          v-for="(item, idx) in currentPrompts"
-          :key="idx"
-          class="prompt-item"
-          @click="sendPrompt(item.text, item.intent || 'KB_QA')"
-        >
-          <text class="prompt-text">{{ item.text }}</text>
-          <text class="prompt-arrow">➤</text>
-        </view>
-        <view class="prompts-footer">
-          <text class="prompts-page">{{ promptPage }}/{{ totalPromptPages }}</text>
-          <text class="prompts-next" @click="nextPrompts">换一批 →</text>
-        </view>
-      </view>
+      <chat-prompts
+        :tabs="promptTabs" :activeTab="promptTab" :items="currentPrompts"
+        :page="promptPage" :totalPages="totalPromptPages"
+        @tabChange="promptTab = $event" @send="sendPrompt" @next="nextPrompts" />
 
-      <view
-        v-for="(msg, idx) in messages"
-        :key="msg.id"
-        class="msg-item"
-        :class="msg.role === 'user' ? 'msg-user' : 'msg-bot'"
-      >
+      <chat-message v-for="msg in messages" :key="msg.id" :message="msg" :imgBaseUrl="imgBaseUrl" />
 
-        <view class="msg-content">
-          <view class="msg-bubble">
-            <rich-text
-              v-if="msg.role === 'bot'"
-              :nodes="renderMarkdown(msg.content)"
-              class="rich-text"
-            ></rich-text>
-            <text v-else class="user-text">{{ msg.content }}</text>
-
-            <!-- 来源引用 -->
-            <view v-if="msg.sources && msg.sources.length" class="msg-sources">
-              <view
-                v-for="(src, si) in msg.sources.filter(s => s.doc_name && !s.doc_name.startsWith('API:'))"
-                :key="si"
-                class="source-item"
-              >
-                <text class="source-icon">📄</text>
-                <text class="source-name">{{ src.doc_name }}</text>
-              </view>
-            </view>
-          </view>
-          <text class="msg-time">{{ msg.time }}</text>
-        </view>
-      </view>
-
-      <!-- 思考中占位 -->
       <view v-if="loading" class="msg-item msg-bot">
         <view class="msg-content">
           <view class="msg-bubble thinking-bubble">
-            <view class="thinking-dots">
-              <view class="dot"></view>
-              <view class="dot"></view>
-              <view class="dot"></view>
-            </view>
+            <view class="thinking-dots"><view class="dot"></view><view class="dot"></view><view class="dot"></view></view>
             <text class="thinking-text">思考中...</text>
           </view>
         </view>
       </view>
-
-      <!-- 底部占位 -->
-      <view style="height: 20rpx"></view>
+      <view style="height:20rpx"></view>
     </view>
 
-    <!-- 输入区 -->
-    <view class="input-area" :class="{ 'input-safe': isIphoneX }">
-      <view class="input-wrapper">
-        <input
-          class="input-box"
-          v-model="inputText"
-          type="text"
-          :placeholder="loading ? '请等待回复...' : '输入您的问题...'"
-          :disabled="loading"
-          confirm-type="send"
-          @confirm="sendMessage"
-          @input="onInput"
-        />
-        <view
-          class="send-btn"
-          :class="{ 'send-btn-disabled': !inputText.trim() || loading }"
-          @click="sendMessage"
-        >
-          <text class="send-icon">发送</text>
-        </view>
-      </view>
-    </view>
+    <chat-input :text="inputText" :disabled="loading" @send="sendMessage" @update:text="inputText = $event" />
   </view>
 </template>
 
 <script>
+import ChatHeader from '@/components/chat-header.vue'
+import ChatHistory from '@/components/chat-history.vue'
+import ChatPrompts from '@/components/chat-prompts.vue'
+import ChatMessage from '@/components/chat-message.vue'
+import ChatInput from '@/components/chat-input.vue'
 import { sendMessage as apiSendMessage, createSession, getSessionMessages, getSessions, getPrompts } from '@/utils/ai-api.js'
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-}
-
-function formatTime() {
-  const d = new Date()
-  const h = String(d.getHours()).padStart(2, '0')
-  const m = String(d.getMinutes()).padStart(2, '0')
-  return h + ':' + m
-}
+function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }
+function formatTime() { const d = new Date(); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') }
 
 export default {
+  components: { ChatHeader, ChatHistory, ChatPrompts, ChatMessage, ChatInput },
   data() {
     return {
-      sessionId: '',
-      messages: [],
-      inputText: '',
-      loading: false,
-      statusText: '在线',
-      isIphoneX: false,
-      hasMoreHistory: false,
-      showHistory: false,
-      sessions: [],
-      groupedSessions: { today: [], yesterday: [], week: [] },
-      promptTab: 'all',
-      promptPage: 1,
-      pendingIntent: null,
+      sessionId: '', messages: [], inputText: '', loading: false, statusText: '在线',
+      showHistory: false, sessions: [], groupedSessions: { today: [], yesterday: [], week: [] },
+      promptTab: 'all', promptPage: 1, pendingIntent: null,
       imgBaseUrl: (import.meta.env.VITE_SERVER_BASE || 'http://3d0e7225.r10.cpolar.top'),
-      promptTabs: [{ key: 'all', label: '全部' }],
-      promptMap: {},
-      allPrompts: []
+      promptTabs: [{ key: 'all', label: '全部' }], promptMap: {}, allPrompts: []
     }
   },
-
-  onLoad() {
-    this.initSession()
-    this.checkDevice()
-    this.loadPrompts()
-  },
-
   computed: {
     filteredPrompts() {
       if (this.promptTab === 'all') return this.allPrompts
-      return (this.promptMap[this.promptTab] || [])
+      return this.promptMap[this.promptTab] || []
     },
-    currentPrompts() {
-      const start = (this.promptPage - 1) * 5
-      return this.filteredPrompts.slice(start, start + 5)
-    },
-    totalPromptPages() {
-      return Math.ceil(this.filteredPrompts.length / 5)
-    }
+    currentPrompts() { const s = (this.promptPage - 1) * 5; return this.filteredPrompts.slice(s, s + 5) },
+    totalPromptPages() { return Math.ceil(this.filteredPrompts.length / 5) }
   },
+  onLoad() { this.initSession(); this.checkDevice(); this.loadPrompts() },
   methods: {
-    // ── 初始化 ──
     initSession() {
-      // 从 storage 取上次会话 ID
-      const lastSession = uni.getStorageSync('ai_last_session') || ''
-      if (lastSession) {
-        this.sessionId = lastSession
-        this.loadMessages(lastSession)
-      } else {
-        this.sessionId = generateId()
-      }
+      const last = uni.getStorageSync('ai_last_session') || ''
+      if (last) { this.sessionId = last; this.loadMessages(last) }
+      else this.sessionId = generateId()
     },
-
     checkDevice() {
-      try {
-        const info = uni.getSystemInfoSync()
-        // 简单判断 iPhone X 系列刘海屏
-        this.isIphoneX = info.safeArea && info.safeArea.bottom < info.windowHeight
-      } catch(e) {}
+      try { const info = uni.getSystemInfoSync(); this.isIphoneX = info.safeArea && info.safeArea.bottom < info.windowHeight } catch(e) {}
     },
+    goBack() { uni.navigateBack() },
+    newChat() { this.sessionId = generateId(); this.messages = []; this.inputText = ''; uni.setStorageSync('ai_last_session', this.sessionId) },
 
-    goBack() {
-      uni.navigateBack()
-    },
-
-    // ── 新对话 ──
-    newChat() {
-      this.sessionId = generateId()
-      this.messages = []
-      this.inputText = ''
-      uni.setStorageSync('ai_last_session', this.sessionId)
-    },
-
-    // ── 加载提示词 ──
     async loadPrompts() {
-      try {
-        const data = await getPrompts()
-        if (data && data.tabs) this.promptTabs = data.tabs
-        if (data && data.prompts) {
-          this.promptMap = data.prompts
-          // 全部提示词平铺
-          const flat = []
-          for (const cat of Object.keys(data.prompts)) {
-            for (const item of data.prompts[cat]) {
-              flat.push({ ...item, cat })
-            }
-          }
-          this.allPrompts = flat
-        }
-      } catch(e) {
-        console.log('加载提示词失败:', e.message)
-      }
+      try { const d = await getPrompts(); if (d && d.tabs) this.promptTabs = d.tabs; if (d && d.prompts) { this.promptMap = d.prompts; const flat = []; for (const cat of Object.keys(d.prompts)) for (const item of d.prompts[cat]) flat.push({...item, cat}); this.allPrompts = flat } }
+      catch(e) { console.log('加载提示词失败:', e.message) }
     },
 
-    // ── 提示词 ──
-    sendPrompt(text, intent) {
-      this.inputText = text
-      this.pendingIntent = intent
-      this.sendMessage()
-    },
-    nextPrompts() {
-      if (this.promptPage < this.totalPromptPages) {
-        this.promptPage++
-      } else {
-        this.promptPage = 1
-      }
-    },
+    sendPrompt(text, intent) { this.inputText = text; this.pendingIntent = intent; this.sendMessage() },
+    nextPrompts() { this.promptPage = this.promptPage < this.totalPromptPages ? this.promptPage + 1 : 1 },
 
-    // ── 历史记录 ──
-    toggleHistory() {
-      this.showHistory = !this.showHistory
-      if (this.showHistory) this.fetchSessions()
-    },
-    closeHistory() {
-      this.showHistory = false
-    },
+    toggleHistory() { this.showHistory = !this.showHistory; if (this.showHistory) this.fetchSessions() },
+    closeHistory() { this.showHistory = false },
 
-    async fetchSessions() {
-      try {
-        const data = await getSessions()
-        this.sessions = data.items || []
-        this.groupSessions()
-      } catch(e) {
-        console.log('获取历史记录失败:', e.message)
-      }
-    },
-
+    async fetchSessions() { try { const d = await getSessions(); this.sessions = d.items || []; this.groupSessions() } catch(e) {} },
     groupSessions() {
-      const groups = { today: [], yesterday: [], week: [] }
-      const now = new Date()
-      const todayStr = now.toDateString()
-      const yesterdayDate = new Date(now)
-      yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-      const yesterdayStr = yesterdayDate.toDateString()
-      const weekAgo = new Date(now)
-      weekAgo.setDate(weekAgo.getDate() - 7)
-
+      const g = { today: [], yesterday: [], week: [] }; const n = new Date()
       this.sessions.forEach(s => {
         const d = new Date(s.updated_at || s.created_at)
-        if (d.toDateString() === todayStr) {
-          groups.today.push(s)
-        } else if (d.toDateString() === yesterdayStr) {
-          groups.yesterday.push(s)
-        } else if (d >= weekAgo) {
-          groups.week.push(s)
-        }
+        if (d.toDateString() === n.toDateString()) g.today.push(s)
+        else if (d.toDateString() === new Date(n - 864e5).toDateString()) g.yesterday.push(s)
+        else if (d >= new Date(n - 7*864e5)) g.week.push(s)
       })
-      this.groupedSessions = groups
+      this.groupedSessions = g
     },
-
-    formatSessionTime(isoStr) {
-      if (!isoStr) return ''
-      const d = new Date(isoStr)
-      if (isNaN(d.getTime())) return ''
-      const h = String(d.getHours()).padStart(2, '0')
-      const m = String(d.getMinutes()).padStart(2, '0')
-      return h + ':' + m
-    },
-
     async loadSession(session) {
-      this.closeHistory()
-      this.sessionId = session.id
-      uni.setStorageSync('ai_last_session', session.id)
-      this.messages = []
-      await this.loadMessages(session.id)
-      this.$nextTick(() => this.scrollToBottom())
+      this.closeHistory(); this.sessionId = session.id; uni.setStorageSync('ai_last_session', session.id); this.messages = []; await this.loadMessages(session.id); this.scrollToBottom()
     },
 
-    // ── 消息加载 ──
     async loadMessages(sessionId) {
       try {
         const msgs = await getSessionMessages(sessionId)
         if (msgs && msgs.length) {
-          this.messages = msgs.map(m => ({
-            id: m.id || generateId(),
-            role: m.role === 'user' ? 'user' : 'bot',
-            content: m.content || '',
-            sources: m.metadata?.sources || [],
-            time: m.created_at ? this._fmt(m.created_at) : formatTime()
-          }))
-          this.$nextTick(() => this.scrollToBottom())
+          this.messages = msgs.map(m => ({ id: m.id || generateId(), role: m.role === 'user' ? 'user' : 'bot', content: m.content || '', sources: m.metadata?.sources || [], chartConfig: m.metadata?.chart_config || null, time: m.created_at ? this._fmt(m.created_at) : formatTime() }))
+          this.$nextTick(() => { this.scrollToBottom(); setTimeout(() => { this.messages.forEach(msg => { if (msg.chartConfig) this.drawChart(msg.id, msg.chartConfig) }) }, 800) })
         }
-      } catch(e) {
-        // 会话不存在或没有消息，正常开始新对话
-        console.log('No history messages:', e.message)
-      }
+      } catch(e) { console.log('No history messages:', e.message) }
     },
+    _fmt(iso) { if (!iso) return formatTime(); const d = new Date(iso); return isNaN(d.getTime()) ? formatTime() : String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') },
 
-    _fmt(isoStr) {
-      if (!isoStr) return formatTime()
-      const d = new Date(isoStr)
-      if (isNaN(d.getTime())) return formatTime()
-      return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0')
-    },
-
-    loadHistory() {
-      // 加载更早的历史（暂不实现，后续可加）
-    },
-
-    // ── 发送消息 ──
     async sendMessage() {
       const text = this.inputText.trim()
       if (!text || this.loading) return
+      this.inputText = ''; this.loading = true; this.statusText = '思考中...'
+      this.messages.push({ id: generateId(), role: 'user', content: text, time: formatTime() })
 
-      this.inputText = ''
-      this.loading = true
-      this.statusText = '思考中...'
-
-      // 添加用户消息
-      const userMsg = {
-        id: generateId(),
-        role: 'user',
-        content: text,
-        time: formatTime()
-      }
-      this.messages.push(userMsg)
-
-      // 保存会话（首次发送时）
       if (this.messages.length === 1) {
-        try {
-          const token = uni.getStorageSync('ai_token') || uni.getStorageSync('token') || ''
-          await createSession(this.sessionId, text.slice(0, 50), token ? 'user' : 'anon')
-          uni.setStorageSync('ai_last_session', this.sessionId)
-        } catch(e) {
-          console.log('Create session failed:', e.message)
-        }
+        try { await createSession(this.sessionId, text.slice(0, 50), 'anon'); uni.setStorageSync('ai_last_session', this.sessionId) } catch(e) {}
       }
-
       this.scrollToBottom()
 
-      // 调用后端 API
       try {
-        const hint = this.pendingIntent
-        this.pendingIntent = null
+        const hint = this.pendingIntent; this.pendingIntent = null
         const result = await apiSendMessage(this.sessionId, text, hint)
-
-        const botMsg = {
-          id: generateId(),
-          role: 'bot',
-          content: result.answer || '抱歉，我没有理解您的问题，请换个方式描述。',
-          sources: result.sources || [],
-          time: formatTime()
-        }
-        this.messages.push(botMsg)
+        this.messages.push({ id: generateId(), role: 'bot', content: result.answer || '', sources: result.sources || [], chartConfig: result.chart_config || null, time: formatTime() })
         this.statusText = '在线'
       } catch(e) {
-        console.error('Chat error:', e)
-        const errMsg = e.message.includes('Unauthorized')
-          ? '登录已过期，请重新登录后使用'
-          : '网络开小差了，请稍后再试'
-        this.messages.push({
-          id: generateId(),
-          role: 'bot',
-          content: '😅 ' + errMsg,
-          sources: [],
-          time: formatTime()
-        })
+        const msg = e.message.includes('Unauthorized') ? '登录已过期，请重新登录后使用' : '网络开小差了，请稍后再试'
+        this.messages.push({ id: generateId(), role: 'bot', content: '😅 ' + msg, sources: [], chartConfig: null, time: formatTime() })
         this.statusText = '连接失败'
       }
-
-      this.loading = false
-      this.$nextTick(() => this.scrollToBottom())
+      this.loading = false; this.$nextTick(() => this.scrollToBottom())
     },
 
-    // ── 辅助 ──
     scrollToBottom() {
       this.$nextTick(() => {
-        const el = this.$refs?.msgList?.$el || this.$refs?.msgList
-        if (el) el.scrollTop = el.scrollHeight
+        const el = this.$refs?.msgList?.$el || this.$refs?.msgList; if (el) el.scrollTop = el.scrollHeight
+        this.messages.forEach(m => { if (m.chartConfig && m.role === 'bot') setTimeout(() => this.drawChart(m.id, m.chartConfig), 500) })
       })
     },
 
-    onInput(e) {
-      // 可加输入限制
-    },
-
-    // ── Markdown 转 HTML（供 rich-text 使用） ──
-    renderMarkdown(text) {
-      if (!text) return ''
-      // UniApp rich-text emoji 兼容：将常见 emoji 转为 HTML 实体
-      let h = this._emojiToHtml(this._escapeHtml(text))
-
-      // 代码块
-      const blocks = []
-      h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-        const i = blocks.length
-        blocks.push('<pre><code>' + this._escapeHtml(code.trim()) + '</code></pre>')
-        return `%%CB${i}%%`
-      })
-
-      // 行内代码
-      h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
-
-      // 标题
-      h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-
-      // 粗斜体
-      h = h.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-      h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      h = h.replace(/\*(.+?)\*/g, '<em>$1</em>')
-
-      // 图片（相对路径补全为完整 URL，小程序需要）
-      h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
-        // 如果 src 以 / 开头，拼接完整后端地址
-        const fullSrc = src.startsWith('/') ? this.imgBaseUrl + src : src
-        return '<img src="' + fullSrc + '" alt="' + alt + '" style="max-width:100%;border-radius:8rpx;margin:8rpx 0" />'
-      })
-
-      // 链接
-      h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-
-      // 列表
-      h = h.replace(/^[-*] (.+)$/gm, '<li>$1</li>')
-      h = h.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-      h = h.replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-
-      // 换行
-      h = h.replace(/\n/g, '<br/>')
-
-      // 恢复代码块
-      h = h.replace(/%%CB(\d+)%%/g, (_, i) => blocks[i] || '')
-
-      return h
-    },
-
-    _escapeHtml(t) {
-      return String(t)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-    },
-    // UniApp rich-text emoji 兼容：将 emoji 转为 HTML 实体
-    _emojiToHtml(t) {
-      // 常见 emoji 范围：\u{1F300}-\u{1F9FF} 等
-      return t.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, function(m) {
-        var cp = m.codePointAt(0);
-        if (cp > 0xFFFF) {
-          // 高码点 emoji 用 &#xXXXXX; 格式
-          return '&#x' + cp.toString(16).toUpperCase() + ';';
-        }
-        return m;
-      })
+    drawChart(id, config) {
+      if (!config || !config.keys || !config.values) return
+      // 日期格式统一为 MM/DD
+      const fmtKeys = config.keys.map(k => k.length === 10 ? k.slice(5, 7) + '/' + k.slice(8, 10) : k)
+      if (typeof window !== 'undefined' && document) {
+        this.$nextTick(() => { setTimeout(() => {
+          const dom = document.getElementById('chart-' + id)
+          if (!dom || !window.echarts) return
+          dom.style.width = '100%'; dom.style.height = '360rpx'
+          const chart = window.echarts.init(dom)
+          chart.setOption({ tooltip: { trigger: 'axis' }, grid: { left: '12%', right: '5%', bottom: '18%', top: '12%' }, xAxis: { type: 'category', data: fmtKeys, axisLabel: { rotate: 0, fontSize: 11 } }, yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#eee' } } }, series: [{ type: 'line', data: config.values.map(Number), smooth: true, lineStyle: { width: 2, color: '#667eea' }, areaStyle: { color: 'rgba(102,126,234,0.12)' }, symbol: 'circle', symbolSize: 6, itemStyle: { color: '#667eea' } }] })
+        }, 600) })
+        return
+      }
+      const cid = 'chart-' + id, sys = uni.getSystemInfoSync(), dpr = sys.pixelRatio || 2
+      const cw = 690, ch = 360, pad = { top: 30, right: 24, bottom: 50, left: 60 }
+      const pw = cw - pad.left - pad.right, ph = ch - pad.top - pad.bottom
+      const ks = fmtKeys, vs = config.values.map(Number), mv = Math.max(...vs, 0.1), cl = '#667eea'
+      const cx = uni.createCanvasContext(cid, this)
+      cx.scale(dpr, dpr); cx.setFillStyle('#f8f9ff'); cx.fillRect(0,0,cw,ch)
+      cx.setStrokeStyle('#e8e8e8'); cx.setLineWidth(1)
+      for (let i=0;i<=4;i++){const y=pad.top+(ph/4)*i;cx.beginPath();cx.moveTo(pad.left,y);cx.lineTo(cw-pad.right,y);cx.stroke()}
+      cx.setFontSize(11);cx.setFillStyle('#999');cx.setTextAlign('right')
+      for(let i=0;i<=4;i++)cx.fillText(String(Math.round(mv-(mv/4)*i)),pad.left-8,pad.top+(ph/4)*i+4)
+      const sx=pw/Math.max(ks.length-1,1),pts=vs.map((v,i)=>({x:pad.left+sx*i,y:pad.top+ph-(v/mv)*ph}))
+      cx.beginPath();cx.moveTo(pts[0].x,pad.top+ph);pts.forEach(p=>cx.lineTo(p.x,p.y));cx.lineTo(pts[pts.length-1].x,pad.top+ph);cx.closePath()
+      cx.setFillStyle('rgba(102,126,234,0.15)');cx.fill()
+      cx.beginPath();cx.setStrokeStyle(cl);cx.setLineWidth(3);cx.setLineJoin('round')
+      pts.forEach((p,i)=>i===0?cx.moveTo(p.x,p.y):cx.lineTo(p.x,p.y));cx.stroke()
+      pts.forEach(p=>{cx.beginPath();cx.arc(p.x,p.y,5,0,Math.PI*2);cx.setFillStyle('#fff');cx.fill();cx.setStrokeStyle(cl);cx.setLineWidth(2);cx.stroke()})
+      cx.setFontSize(10);cx.setFillStyle('#999');cx.setTextAlign('center')
+      const ls=Math.max(1,Math.floor(ks.length/6));ks.forEach((k,i)=>{if(i===0||i%ls===0||i===ks.length-1)cx.fillText(k,pts[i].x,pad.top+ph+28)})
+      cx.setFontSize(12);cx.setFillStyle('#333');cx.setTextAlign('left');cx.fillText(config.title||'',pad.left,20);cx.draw()
     }
   }
 }
 </script>
 
-<style scoped>
-.chat-page {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-  background: #f5f6f8;
-  font-family: -apple-system, 'Helvetica Neue', 'PingFang SC', sans-serif;
-}
-/* 确保子元素不溢出 */
-.chat-page > view {
-  flex-shrink: 0;
-}
-
-/* ── 导航栏 ── */
-.nav-bar {
-  display: flex;
-  align-items: center;
-  padding: 150rpx 0 36rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  flex-shrink: 0;
-}
-.nav-left {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  width: 140rpx;
-  flex-shrink: 0;
-  padding-left: 20rpx;
-}
-.nav-back-icon {
-  font-size: 36rpx;
-  color: rgba(255,255,255,.9);
-  padding: 8rpx;
-}
-.nav-hist-btn {
-  font-size: 34rpx;
-  padding: 8rpx;
-  color: rgba(255,255,255,.85);
-}
-.nav-info {
-  flex: 1;
-  text-align: center;
-  position: relative;
-  height: 44rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.nav-title {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 2rpx;
-  line-height: 44rpx;
-}
-.nav-subtitle {
-  font-size: 18rpx;
-  color: rgba(255,255,255,.6);
-  position: absolute;
-  top: -32rpx;
-  left: 0;
-  right: 0;
-  text-align: center;
-}
-.nav-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  width: 140rpx;
-  flex-shrink: 0;
-  padding-right: 20rpx;
-}
-.nav-new-btn {
-  font-size: 38rpx;
-  font-weight: 300;
-  color: rgba(255,255,255,.9);
-  padding: 8rpx 16rpx;
-}
-
-/* ── 消息列表 ── */
-.msg-list {
-  flex: 1;
-  overflow-y: scroll;
-  overflow-x: hidden;
-  padding: 20rpx 24rpx 0;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* ── 提示词列表 ── */
-.prompts-wrap {
-  padding: 40rpx 28rpx 40rpx;
-}
-.prompts-tabs {
-  display: flex;
-  gap: 12rpx;
-  margin-bottom: 20rpx;
-}
-.prompts-tab {
-  font-size: 30rpx;
-  color: #666;
-  padding: 12rpx 24rpx;
-  border-radius: 30rpx;
-  background: #f0f2f5;
-  line-height: 1;
-}
-.prompts-tab-active {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: #fff;
-  font-weight: 500;
-  box-shadow: 0 4rpx 12rpx rgba(102,126,234,.3);
-}
-.prompts-title {
-  display: block;
-  font-size: 28rpx;
-  color: #666;
-  margin-bottom: 28rpx;
-  font-weight: 500;
-}
-.prompt-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 26rpx 24rpx;
-  margin-bottom: 16rpx;
-  background: #fff;
-  border-radius: 14rpx;
-  border: 2rpx solid #e8e8e8;
-}
-.prompt-item:active {
-  background: #f8f9ff;
-  transform: scale(.98);
-}
-.prompt-text {
-  font-size: 26rpx;
-  color: #333;
-  flex: 1;
-  padding-right: 16rpx;
-  line-height: 1.4;
-}
-.prompt-arrow {
-  font-size: 24rpx;
-  color: #ccc;
-  flex-shrink: 0;
-}
-.prompts-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24rpx;
-  margin-top: 32rpx;
-}
-.prompts-page {
-  font-size: 24rpx;
-  color: #bbb;
-}
-.prompts-next {
-  font-size: 26rpx;
-  color: #0f3460;
-  padding: 8rpx 20rpx;
-  border: 2rpx solid #0f3460;
-  border-radius: 30rpx;
-}
-.prompts-next:active {
-  background: #0f3460;
-  color: #fff;
-}
-
-.msg-item {
-  display: flex;
-  gap: 16rpx;
-  margin-bottom: 28rpx;
-  animation: fadeIn 0.3s ease;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(16rpx); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.msg-user {
-  flex-direction: row-reverse;
-}
-
-.msg-avatar {
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28rpx;
-  flex-shrink: 0;
-}
-
-
-.msg-content {
-  max-width: 75%;
-}
-
-.msg-bubble {
-  padding: 18rpx 22rpx;
-  border-radius: 16rpx;
-  font-size: 28rpx;
-  line-height: 1.7;
-  word-break: break-word;
-}
-.msg-user .msg-bubble {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: #fff;
-  border-bottom-right-radius: 4rpx;
-  box-shadow: 0 4rpx 12rpx rgba(102,126,234,.25);
-}
-.msg-bot .msg-bubble {
-  background: #fff;
-  color: #333;
-  border-bottom-left-radius: 4rpx;
-  box-shadow: 0 2rpx 10rpx rgba(0,0,0,.05);
-}
-.msg-bot .rich-text {
-  font-size: 28rpx;
-  line-height: 1.7;
-}
-.user-text {
-  font-size: 28rpx;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
-/* rich-text 内部样式 */
-.rich-text >>> h1, .rich-text >>> h2, .rich-text >>> h3 {
-  font-weight: 600;
-  margin: 12rpx 0 6rpx;
-}
-.rich-text >>> h1 { font-size: 34rpx; }
-.rich-text >>> h2 { font-size: 32rpx; }
-.rich-text >>> h3 { font-size: 30rpx; }
-.rich-text >>> p { margin: 4rpx 0; }
-.rich-text >>> ul, .rich-text >>> ol {
-  padding-left: 32rpx;
-  margin: 4rpx 0;
-}
-.rich-text >>> code {
-  background: #f0f2f5;
-  padding: 2rpx 10rpx;
-  border-radius: 6rpx;
-  font-size: 24rpx;
-}
-.rich-text >>> pre {
-  background: #1a1a2e;
-  color: #e6e6e6;
-  padding: 20rpx;
-  border-radius: 12rpx;
-  overflow-x: auto;
-  margin: 8rpx 0;
-}
-.rich-text >>> pre code {
-  background: none;
-  padding: 0;
-  color: inherit;
-  font-size: 24rpx;
-}
-.rich-text >>> img {
-  max-width: 100%;
-  border-radius: 8rpx;
-  margin: 8rpx 0;
-}
-
-.msg-time {
-  font-size: 20rpx;
-  color: #bbb;
-  margin-top: 6rpx;
-  padding: 0 4rpx;
-}
-.msg-user .msg-time {
-  text-align: right;
-}
-
-/* 来源引用 */
-.msg-sources {
-  margin-top: 12rpx;
-  padding-top: 12rpx;
-  border-top: 2rpx solid rgba(0,0,0,.06);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-}
-.msg-user .msg-sources {
-  border-top-color: rgba(255,255,255,.2);
-}
-.source-item {
-  display: inline-flex;
-  align-items: center;
-  background: rgba(0,0,0,.04);
-  border-radius: 6rpx;
-  padding: 4rpx 12rpx;
-  font-size: 22rpx;
-}
-.msg-user .source-item {
-  background: rgba(255,255,255,.15);
-}
-.source-icon {
-  margin-right: 4rpx;
-}
-.source-name {
-  color: inherit;
-  opacity: .8;
-}
-
-/* 思考中动画 */
-.thinking-bubble {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-.thinking-dots {
-  display: flex;
-  gap: 6rpx;
-}
-.dot {
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  animation: dotPulse 1.4s infinite;
-}
+<style>
+.chat-page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: #f0f2f5; }
+.chat-page > view { flex-shrink: 0; }
+.msg-list { flex: 1; overflow-y: scroll; overflow-x: hidden; padding: 24rpx 28rpx 0; -webkit-overflow-scrolling: touch; }
+.thinking-bubble { display: flex; align-items: center; gap: 12rpx; }
+.thinking-dots { display: flex; gap: 6rpx; }
+.dot { width: 14rpx; height: 14rpx; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); animation: dotPulse 1.4s infinite; }
 .dot:nth-child(2) { animation-delay: .2s; }
 .dot:nth-child(3) { animation-delay: .4s; }
-@keyframes dotPulse {
-  0%, 60%, 100% { opacity: .3; transform: scale(.8); }
-  30% { opacity: 1; transform: scale(1); }
-}
-.thinking-text {
-  font-size: 24rpx;
-  color: #667eea;
-}
-
-/* ── 输入区 ── */
-.input-area {
-  padding: 16rpx 24rpx;
-  background: #fff;
-  border-top: 1rpx solid #e8e8e8;
-  flex-shrink: 0;
-}
-.input-safe {
-  padding-bottom: 40rpx;
-}
-.input-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-.input-box {
-  flex: 1;
-  height: 92rpx;
-  border: 2rpx solid #d9d9d9;
-  border-radius: 36rpx;
-  padding: 0 28rpx;
-  font-size: 28rpx;
-  background: #f5f6f8;
-  outline: none;
-}
-.input-box:focus {
-  border-color: #667eea;
-  background: #fff;
-  box-shadow: 0 0 0 4rpx rgba(102,126,234,.1);
-}
-.input-box[disabled] {
-  background: #eee;
-  color: #999;
-}
-.send-btn {
-  height: 92rpx;
-  min-width: 120rpx;
-  border-radius: 36rpx;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 0 24rpx;
-  box-shadow: 0 4rpx 12rpx rgba(102,126,234,.3);
-}
-.send-btn-disabled {
-  opacity: .35;
-}
-.send-icon {
-  color: #fff;
-  font-size: 28rpx;
-  font-weight: 500;
-}
-
-/* ── 历史记录面板 ── */
-.hist-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,.35);
-  z-index: 1999;
-}
-.hist-panel {
-  position: fixed;
-  top: 0; left: 0; bottom: 0;
-  width: 520rpx;
-  background: #fff;
-  z-index: 2000;
-  transform: translateX(-100%);
-  transition: transform .25s ease;
-  display: flex;
-  flex-direction: column;
-}
-.hist-open {
-  transform: translateX(0);
-}
-.hist-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 88rpx 28rpx 24rpx;
-  border-bottom: 1rpx solid #e8e8e8;
-  flex-shrink: 0;
-}
-.hist-title {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #1a1a2e;
-}
-.hist-close {
-  font-size: 32rpx;
-  color: #999;
-  padding: 10rpx;
-}
-.hist-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16rpx 0 40rpx;
-}
-.hist-group {
-  margin-bottom: 12rpx;
-}
-.hist-group-label {
-  display: block;
-  font-size: 24rpx;
-  color: #999;
-  padding: 16rpx 28rpx 8rpx;
-  font-weight: 500;
-}
-.hist-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20rpx 28rpx;
-  border-bottom: 1rpx solid #f5f5f5;
-}
-.hist-item:active {
-  background: #f5f6f8;
-}
-.hist-item-title {
-  font-size: 26rpx;
-  color: #333;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-right: 16rpx;
-}
-.hist-item-time {
-  font-size: 22rpx;
-  color: #bbb;
-  flex-shrink: 0;
-}
-.hist-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-top: 200rpx;
-  font-size: 26rpx;
-  color: #bbb;
-}
+@keyframes dotPulse { 0%,60%,100% { opacity:.3; transform:scale(.8) } 30% { opacity:1; transform:scale(1) } }
+.thinking-text { font-size: 24rpx; color: #667eea; }
 </style>

@@ -65,12 +65,14 @@ class ChatService:
         # 1b. 快速检测是否为数据查询 — 由 LangGraph 的 router_node 统一处理
         # 不再在这里做暴力拦截，所有意图都交给工作流
         t0 = time.time()
+        from app.utils.common import format_chat_history
         from app.workflows.nodes.data_query_node import data_query_direct, _select_api
-        api_check = await _select_api(user_input)
+        chat_history_str = format_chat_history(history)
+        api_check = await _select_api(user_input, chat_history_str)
         timings["detect_intent"] = round((time.time() - t0) * 1000)
         logger.info("[耗时] 数据查询检测: %dms, matched=%s",
                      timings["detect_intent"], api_check['path'] if api_check else None)
-        dq_result = await data_query_direct(user_input, user_token) if api_check else None
+        dq_result = await data_query_direct(user_input, user_token, chat_history_str) if api_check else None
         if dq_result:
             elapsed = round((time.time() - start) * 1000)
             logger.info("[耗时] 数据查询直通: %dms | session=%s, chart=%s",
@@ -78,6 +80,7 @@ class ChatService:
             await self._persist_messages(session_id, user_input, dq_result["answer"], {
                 "intent": "DATA_QUERY", "user_id": user_id,
                 "sources": dq_result.get("sources", []),
+                "chart_config": dq_result.get("chart_config"),
             })
             return {
                 "answer": dq_result["answer"],
@@ -292,6 +295,7 @@ class ChatService:
                     "sources": state.get("sources"),
                     "follow_ups": state.get("follow_up_questions"),
                     "processing_steps": state.get("processing_steps"),
+                    "chart_config": state.get("chart_config"),
                 }
                 ai_msg = Message(
                     conversation_id=session_id,
