@@ -38,7 +38,7 @@ services:
 
   # ── Qdrant 向量数据库 ──
   qdrant:
-    image: qdrant/qdrant:latest
+    image: docker.m.daocloud.io/qdrant/qdrant:latest
     container_name: aics-qdrant
     restart: unless-stopped
     ports:
