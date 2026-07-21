@@ -49,7 +49,7 @@ def build_chat_graph() -> StateGraph:
             "DATA_QUERY": "data_query",
             "CHITCHAT": "generation",
             "HANDOFF": "generation",
-            "CLARIFY": "retrieval",
+            "CLARIFY": "generation",       # 追问走 generation，基于对话历史回答
         },
     )
 

@@ -7,13 +7,13 @@ FROM docker.m.daocloud.io/library/python:3.12-slim AS builder
 WORKDIR /app
 
 # 安装 uv（国内可用 pip 安装）
-RUN pip install uv -i https://pypi.tuna.tsinghua.edu.cn/simple --root-user-action=ignore
+RUN pip install uv -i https://mirrors.aliyun.com/pypi/simple --root-user-action=ignore
 
 # 复制依赖文件
 COPY pyproject.toml uv.lock ./
 
-# 安装所有依赖（不含 dev，国内用清华源）
-RUN uv sync --no-dev --frozen --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+# 安装所有依赖（不含 dev，国内用阿里云源）
+RUN uv sync --no-dev --frozen --index-url https://mirrors.aliyun.com/pypi/simple
 
 # 复制源码
 COPY app ./app

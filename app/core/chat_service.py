@@ -52,6 +52,16 @@ class ChatService:
         流程:
           记忆加载 → LangGraph 工作流 → 持久化 → 长期记忆提取
         """
+        # ── Input Guardrails ──
+        if not user_input or not user_input.strip():
+            return {"answer": "请输入您的问题", "sources": [], "intent": "CLARIFY"}
+        if len(user_input) > 4000:
+            return {"answer": "问题太长了，请精简到 4000 字以内", "sources": [], "intent": "CLARIFY"}
+        # 拦截明显非法的输入
+        _dangerous = {"<script", "DROP TABLE", "DELETE FROM", "process.env"}
+        if any(d in user_input.upper() for d in _dangerous):
+            return {"answer": "输入包含非法内容，请重新描述您的问题", "sources": [], "intent": "HANDOFF"}
+
         start = time.time()
         timings = {}
 
